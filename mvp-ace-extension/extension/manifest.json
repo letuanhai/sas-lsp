@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "SAS Editor with LSP",
+  "version": "1.0.0",
+  "description": "SAS code editor powered by Ace Editor and Language Server Protocol",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.svg",
+      "48": "icon48.svg",
+      "128": "icon128.svg"
+    }
+  },
+  "icons": {
+    "16": "icon16.svg",
+    "48": "icon48.svg",
+    "128": "icon128.svg"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["sas-language-server.worker.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

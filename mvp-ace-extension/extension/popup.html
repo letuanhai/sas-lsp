@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SAS Editor</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 800px;
+      height: 600px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #toolbar {
+      background: #2d2d30;
+      color: #fff;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #3e3e42;
+    }
+
+    #toolbar h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    #toolbar button {
+      background: #0e639c;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      cursor: pointer;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+
+    #toolbar button:hover {
+      background: #1177bb;
+    }
+
+    #status {
+      padding: 8px 10px;
+      background: #3c3c3c;
+      color: #cccccc;
+      font-size: 12px;
+      border-bottom: 1px solid #3e3e42;
+      display: flex;
+      gap: 15px;
+    }
+
+    #status .indicator {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    #status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #888;
+    }
+
+    #status .dot.connected {
+      background: #4ec9b0;
+    }
+
+    #editor-container {
+      flex: 1;
+      position: relative;
+    }
+
+    #editor {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <h1>🚀 SAS Editor with LSP</h1>
+    <div>
+      <button id="formatBtn">Format Code</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+  </div>
+
+  <div id="status">
+    <div class="indicator">
+      <span class="dot" id="lspStatus"></span>
+      <span id="lspText">LSP: Initializing...</span>
+    </div>
+    <div class="indicator">
+      <span>Lines: <span id="lineCount">0</span></span>
+    </div>
+  </div>
+
+  <div id="editor-container">
+    <div id="editor">/* Sample SAS Code */
+data example;
+  set sashelp.class;
+  bmi = weight / (height**2) * 703;
+  if age > 14 then agegroup = 'Teen';
+  else agegroup = 'Child';
+run;
+
+proc means data=example;
+  var bmi;
+  class agegroup;
+run;
+</div>
+  </div>
+
+  <!-- Load Ace Editor from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-text.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/theme-monokai.js"></script>
+
+  <!-- Load ace-linters from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/ace-linters@0.11.5/build/ace-linters.js"></script>
+
+  <!-- Our custom integration -->
+  <script src="editor.js"></script>
+</body>
+</html>
