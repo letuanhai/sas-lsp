@@ -60,6 +60,7 @@ export interface Token {
     | "macro-comment"
     | "macro-ref"
     | "macro-sec-keyword"
+    | "macro-var"
     | "cards-data"
     | "string"
     | "date"
@@ -121,6 +122,7 @@ export class Lexer {
     MCOMMENT: "macro-comment",
     MREF: "macro-ref",
     MSKEYWORD: "macro-sec-keyword",
+    MVAR: "macro-var",
     CARDSDATA: "cards-data",
     STR: "string",
     DATE: "date",

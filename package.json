@@ -130,6 +130,11 @@
         "description": "SAS Macro Comment"
       },
       {
+        "id": "macro-var",
+        "superType": "variable",
+        "description": "SAS Macro Variable"
+      },
+      {
         "id": "sec-keyword",
         "superType": "function",
         "description": "SAS Section keyword"

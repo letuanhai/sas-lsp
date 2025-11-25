@@ -27,6 +27,7 @@ export const legend = {
     "macro-comment",
     "macro-ref",
     "macro-sec-keyword",
+    "macro-var",
     "cards-data",
     "string",
     "date",

@@ -359,6 +359,57 @@ export class SyntaxProvider {
         endLine: token.end.line,
       });
     }
+
+    // Detect and add macro variables within string tokens
+    this._addMacroVarsInString(token);
+  }
+
+  private _addMacroVarsInString(token: Omit<Token, "text">) {
+    // Only process string-like tokens (not multiline strings for now)
+    if (
+      token.start.line !== token.end.line ||
+      (token.type !== "string" &&
+        token.type !== "date" &&
+        token.type !== "time" &&
+        token.type !== "dt" &&
+        token.type !== "namelit")
+    ) {
+      return;
+    }
+
+    const line = token.start.line;
+    const text = this.model.getLine(line);
+    const startCol = token.start.column;
+    const endCol = token.end.column;
+
+    // Extract the string content (excluding quotes)
+    const stringContent = text.substring(startCol, endCol);
+
+    // Regex to match macro variable references: & followed by valid identifier
+    // Valid identifiers: start with letter or underscore, followed by letters, digits, underscores
+    const macroVarRegex = /&+([a-zA-Z_][a-zA-Z0-9_]*\.?)/g;
+    let match;
+
+    while ((match = macroVarRegex.exec(stringContent)) !== null) {
+      const varStart = startCol + match.index;
+      const varEnd = varStart + match[0].length;
+
+      // Add macro-var token to the syntax table
+      const syntaxLine = this.syntaxTable[line];
+      if (syntaxLine) {
+        // Insert the macro-var token in the correct position
+        syntaxLine.push({
+          start: varStart,
+          state: null,
+          style: "macro-var",
+        });
+      }
+    }
+
+    // Sort the tokens on this line by start position to maintain order
+    if (this.syntaxTable[line]) {
+      this.syntaxTable[line].sort((a, b) => a.start - b.start);
+    }
   }
 
   // public functions
