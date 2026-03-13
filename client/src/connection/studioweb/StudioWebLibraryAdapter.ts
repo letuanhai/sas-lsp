@@ -225,7 +225,7 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
       const table = item.name;
 
       // Build dataset options for firstobs/obs
-      const datasetOptions = `firstobs=${start + 1} obs=${start + limit + 1}`;
+      const datasetOptions = `firstobs=${start + 1} obs=${start + limit}`;
 
       // Build WHERE clause
       let whereClause = "";
@@ -259,14 +259,14 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
       const response = await axios.post(
         `/sessions/${creds.sessionId}/sql`,
         sql,
-        {
-          params: { numobs: limit },
-          headers: { "Content-Type": "text/plain; charset=UTF-8" },
-        },
+        { headers: { "Content-Type": "text/plain; charset=UTF-8" } },
       );
 
       const rawRows: string[][] = response.data?.rows ?? [];
-      const count: number = response.data?.count ?? rawRows.length;
+      // If the page is smaller than requested, we've reached the end.
+      // Pass the exact total so ag-grid stops. Otherwise pass -1 (unknown)
+      // so it keeps fetching the next block.
+      const count = rawRows.length < limit ? start + rawRows.length : -1;
 
       const rows: TableRow[] = rawRows.map(
         (rowValues, idx): TableRow => ({
