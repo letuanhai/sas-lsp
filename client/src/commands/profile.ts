@@ -18,6 +18,19 @@ export const profileConfig = new ProfileConfig();
 export async function addProfile(): Promise<void> {
   const profileName = await createInputTextBox(ProfilePromptType.NewProfile);
   if (profileName) {
+    if (profileConfig.getProfileByName(profileName)) {
+      const confirm = await window.showWarningMessage(
+        l10n.t(
+          'A profile named "{name}" already exists. Do you want to overwrite it?',
+          { name: profileName },
+        ),
+        { modal: true },
+        l10n.t("Overwrite"),
+      );
+      if (confirm !== l10n.t("Overwrite")) {
+        return;
+      }
+    }
     await profileConfig
       .prompt(profileName)
       .then(() => profileConfig.updateActiveProfileSetting(profileName));
