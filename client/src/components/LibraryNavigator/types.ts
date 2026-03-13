@@ -59,7 +59,7 @@ export interface LibraryAdapter {
   ): Promise<TableData>;
   getTableRowCount(
     item: LibraryItem,
-  ): Promise<{ rowCount: number; maxNumberOfRowsToRead: number }>;
+  ): Promise<{ rowCount: number; maxNumberOfRowsToRead: number; columnCount?: number }>;
   getTables(
     item: LibraryItem,
     start: number,

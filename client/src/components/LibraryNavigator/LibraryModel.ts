@@ -108,6 +108,14 @@ class LibraryModel {
     );
   }
 
+  public async getTableRowCount(
+    item: LibraryItem,
+  ): Promise<{ rowCount: number; columnCount?: number }> {
+    const { rowCount, columnCount } =
+      await this.libraryAdapter.getTableRowCount(item);
+    return { rowCount, columnCount };
+  }
+
   public async fetchColumns(item: LibraryItem) {
     await this.libraryAdapter.setup();
     let offset = 0;

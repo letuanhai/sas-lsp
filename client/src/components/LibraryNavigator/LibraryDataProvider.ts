@@ -133,6 +133,7 @@ class LibraryDataProvider
                 item,
                 this.model.getTableResultSet(item),
                 () => this.model.fetchColumns(item),
+                () => this.model.getTableRowCount(item),
               ],
               title: Messages.ViewTableCommandTitle,
             }

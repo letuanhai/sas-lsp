@@ -52,6 +52,7 @@ class LibraryNavigator implements SubscriptionProvider {
           item: LibraryItem,
           paginator: PaginatedResultSet<{ data: TableData; error?: Error }>,
           fetchColumns: () => Column[],
+          fetchRowCount: () => Promise<{ rowCount: number; columnCount?: number }>,
         ) => {
           this.webviewManager.render(
             new DataViewer(
@@ -62,6 +63,7 @@ class LibraryNavigator implements SubscriptionProvider {
               (columnName: string) => {
                 this.displayTableProperties(item, true, columnName);
               },
+              fetchRowCount,
             ),
             item.uid,
           );

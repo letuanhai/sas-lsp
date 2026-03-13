@@ -25,6 +25,10 @@ class DataViewer extends WebView {
     }>,
     protected readonly fetchColumns: () => Column[],
     protected readonly loadColumnProperties: (columnName: string) => void,
+    protected readonly fetchRowCount?: () => Promise<{
+      rowCount: number;
+      columnCount?: number;
+    }>,
   ) {
     super(extensionUri, uid);
   }
@@ -112,6 +116,7 @@ class DataViewer extends WebView {
           data: {
             columns: await this.fetchColumns(),
             viewProperties: this.viewProperties,
+            ...(await this.fetchRowCount?.()),
           },
         });
         break;

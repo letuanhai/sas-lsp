@@ -19,8 +19,9 @@ import "ag-grid-community/styles/ag-theme-alpine.css";
 const gridStyles = {
   "--ag-borders": "none",
   "--ag-row-border-width": "0px",
-  height: "calc(100% - 9.2rem)",
+  flex: "1",
   width: "100%",
+  minHeight: 0,
 };
 
 const DataViewer = () => {
@@ -35,6 +36,8 @@ const DataViewer = () => {
     gridRef,
     onGridReady,
     refreshResults,
+    totalRowCount,
+    totalColumnCount,
     viewProperties,
   } = useDataViewer();
 
@@ -67,6 +70,20 @@ const DataViewer = () => {
   return (
     <div className="data-viewer">
       <h1>{title}</h1>
+      {(totalRowCount !== undefined || totalColumnCount !== undefined) && (
+        <div className="row-count-bar">
+          <span className="row-count">
+            {[
+              totalRowCount !== undefined ? `${totalRowCount} rows` : undefined,
+              totalColumnCount !== undefined
+                ? `${totalColumnCount} columns`
+                : undefined,
+            ]
+              .filter(Boolean)
+              .join(", ")}
+          </span>
+        </div>
+      )}
       <TableFilter
         onCommit={(value) => {
           refreshResults({ filterValue: value });
