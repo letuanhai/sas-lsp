@@ -183,8 +183,14 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
         label: String(col.label ?? ""),
         type: String(col.type ?? "char"),
         length: Number(col.length ?? 0),
-        format: col.format ?? { name: "", width: 0, precision: 0 },
-        informat: col.informat ?? { name: "", width: 0, precision: 0 },
+        format:
+          typeof col.format === "string"
+            ? { name: col.format }
+            : (col.format ?? { name: "" }),
+        informat:
+          typeof col.informat === "string"
+            ? { name: col.informat }
+            : (col.informat ?? { name: "" }),
         // Compute the icon type using the shared utility
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ...(() => {
