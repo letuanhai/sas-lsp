@@ -5,12 +5,29 @@ import { l10n, window } from "vscode";
 import { RunResult } from "..";
 import { updateStatusBarItem } from "../../components/StatusBarItem";
 import { Session } from "../session";
-import { extractOutputHtmlFileName } from "../util";
 import { getAxios, getCredentials, setCredentials } from "./state";
 import { Config } from "./types";
 export type { Config };
 
 let sessionInstance: StudioWebSession;
+
+/**
+ * Removes the ODS HTML5 wrapper that SASCodeDocument.wrapCodeWithOutputHtml
+ * injects around submitted code. SAS Studio handles output rendering natively,
+ * so the wrapper is not needed and causes a file-permission error when SAS
+ * tries to write the body file to the application directory.
+ */
+function stripOdsWrapper(code: string): string {
+  return code
+    .replace(
+      /title;footnote;ods _all_ close;\n ods graphics on;\n ods html5\(id=vscode\)[^\n]*;\n/,
+      "",
+    )
+    .replace(
+      /\n;[*]';[*]";[*]\/;run;quit;ods html5\(id=vscode\) close;\n?$/,
+      "",
+    );
+}
 
 /**
  * Converts HTML log chunk to plain-text lines, preserving line breaks from
@@ -49,7 +66,6 @@ export class StudioWebSession extends Session {
   private _config: Config;
   private _cancelled = false;
   private _submissionId: string | undefined;
-  private _htmlFileName = "";
 
   public set config(value: Config) {
     this._config = value;
@@ -108,19 +124,12 @@ export class StudioWebSession extends Session {
 
     this._cancelled = false;
     this._submissionId = undefined;
-    this._htmlFileName = "";
     const { sessionId } = credentials;
 
-    // Redirect ODS HTML5 output to /tmp so SAS has write permission
-    const codeWithODSPath = code.replace(
-      /\bods html5\(id=vscode\)([^;]*;)/i,
-      `ods html5(id=vscode) path="/tmp" $1`,
-    );
-
-    // Submit code
+    // Submit code, removing the ODS HTML5 wrapper injected by SASCodeDocument
     const { data: submission } = await axiosInstance.post(
       `/sessions/${sessionId}/asyncSubmissions`,
-      codeWithODSPath,
+      stripOdsWrapper(code),
       {
         params: { label: "Program", uri: "Program" },
         headers: { "Content-Type": "text/plain; charset=UTF-8" },
@@ -156,40 +165,28 @@ export class StudioWebSession extends Session {
                 line,
               }));
 
-            // Extract the ODS output filename from log (e.g. body="<uuid>.htm")
-            for (const { line } of lines) {
-              this._htmlFileName = extractOutputHtmlFileName(
-                line,
-                this._htmlFileName,
-              );
-            }
-
             if (lines.length > 0) {
               this._onExecutionLogFn?.(lines);
             }
           }
         } else if (messageType === "SubmitComplete") {
-          // Fetch HTML result from /tmp via workspace API
-          if (this._htmlFileName) {
-            try {
-              const { data: htmlContent } = await axiosInstance.get(
-                `/sessions/${sessionId}/workspace/~~ds~~/tmp/${this._htmlFileName}.htm`,
-                { params: { ct: "text/html;charset=UTF-8" } },
-              );
+          const resultsLink = payload?.links?.find(
+            (link: { rel: string; href: string }) => link.rel === "results",
+          );
 
-              if (
-                typeof htmlContent === "string" &&
-                /id="IDX/i.test(htmlContent)
-              ) {
+          if (resultsLink?.href) {
+            try {
+              // Build an absolute URL — the axios instance has baseURL set to
+              // {endpoint}/sasexec, so passing a full https:// URL bypasses it.
+              const resultsUrl = resultsLink.href.startsWith("http")
+                ? resultsLink.href
+                : `${credentials.endpoint}${resultsLink.href}`;
+
+              const { data: htmlContent } = await axiosInstance.get(resultsUrl);
+
+              if (typeof htmlContent === "string" && htmlContent.trim()) {
                 runResult = { html5: htmlContent, title: "Result" };
               }
-
-              // Clean up the temp file
-              axiosInstance
-                .delete(
-                  `/sessions/${sessionId}/workspace/~~ds~~/tmp/${this._htmlFileName}.htm`,
-                )
-                .catch(() => undefined);
             } catch {
               // If fetching results fails, continue without results
             }
