@@ -25,11 +25,13 @@ import { getResourceId, getSasServerUri } from "../rest/util";
 import { ensureCredentials } from "./index";
 import { getAxios, getCredentials } from "./state";
 
-/** Encode a filesystem path for the ~~ds~~ workspace API segment. */
-function encodeWorkspacePath(filePath: string): string {
-  // The API uses ~~ds~~ as a prefix then the raw path; forward slashes are kept as-is.
-  // We do not double-encode, just pass the path directly after the prefix.
-  return filePath;
+/**
+ * Encode a filesystem path using SAS Studio's tilde notation.
+ * `/` → `~ps~`, `.` → `~dot~`, with a trailing `~` terminator.
+ * Example: `/folders/myfolders/test.sas` → `~ps~folders~ps~myfolders~ps~test~dot~sas~`
+ */
+function encodeOldStylePath(filePath: string): string {
+  return filePath.replace(/\./g, "~dot~").replace(/\//g, "~ps~") + "~";
 }
 
 interface WorkspaceEntry {
@@ -110,19 +112,31 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async getChildItems(parentItem: ContentItem): Promise<ContentItem[]> {
+    console.log("[StudioWeb] getChildItems called for id:", parentItem.id, "uri:", parentItem.uri);
     if (!(await ensureCredentials())) {
+      console.warn("[StudioWeb] getChildItems: ensureCredentials returned false");
       return [];
     }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
+      console.warn("[StudioWeb] getChildItems: no axios or creds");
       return [];
     }
+    console.log("[StudioWeb] getChildItems: sessionId =", creds.sessionId, "baseURL =", axios.defaults.baseURL);
 
     // Root folder: fetch the home/starting directory entry
     if (parentItem.id === SERVER_FOLDER_ID) {
       try {
-        const response = await axios.get(`/${creds.sessionId}/_root_`);
+        const rootUrl = `/${creds.sessionId}/_root_`;
+        console.log("[StudioWeb] getChildItems(_root_) GET", rootUrl);
+        const response = await axios.get(rootUrl);
+        console.log(
+          "[StudioWeb] getChildItems(_root_) status:",
+          response.status,
+          "data:",
+          JSON.stringify(response.data),
+        );
         const data = response.data;
 
         // The _root_ response may be a single entry or an array; normalise to array
@@ -179,9 +193,21 @@ class StudioWebServerAdapter implements ContentAdapter {
         (l) => l.rel === "getDirectoryMembers",
       );
       const dirPath = dirLink?.uri ?? parentItem.uri;
+      const dirUrl = `/${creds.sessionId}/${encodeOldStylePath(dirPath)}`;
+      console.log(
+        "[StudioWeb] getChildItems GET",
+        dirUrl,
+        "(dirPath:",
+        dirPath,
+        ")",
+      );
 
-      const response = await axios.get(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(dirPath)}`,
+      const response = await axios.get(dirUrl);
+      console.log(
+        "[StudioWeb] getChildItems status:",
+        response.status,
+        "data:",
+        JSON.stringify(response.data),
       );
 
       const data = response.data;
@@ -190,6 +216,7 @@ class StudioWebServerAdapter implements ContentAdapter {
         : data?.items
         ? data.items
         : [];
+      console.log("[StudioWeb] getChildItems entries count:", entries.length);
 
       const childItems = entries
         .filter((e) => e.name) // skip unnamed entries
@@ -198,7 +225,7 @@ class StudioWebServerAdapter implements ContentAdapter {
       return sortedContentItems(childItems);
     } catch (error) {
       console.error(
-        "StudioWebServerAdapter.getChildItems error for",
+        "[StudioWeb] getChildItems error for",
         parentItem.uri,
         error,
       );
@@ -288,7 +315,7 @@ class StudioWebServerAdapter implements ContentAdapter {
 
     try {
       const response = await axios.get(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(item.uri)}`,
+        `/${creds.sessionId}/${encodeOldStylePath(item.uri)}`,
         {
           params: { ct: "text/plain;charset=UTF-8" },
           responseType: "text",
@@ -323,7 +350,7 @@ class StudioWebServerAdapter implements ContentAdapter {
     try {
       const path = getResourceId(uri);
       await axios.post(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(path)}`,
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${path}`,
         content,
         {
           params: { ct: "text/plain;charset=UTF-8" },
@@ -344,7 +371,7 @@ class StudioWebServerAdapter implements ContentAdapter {
 
     try {
       await axios.delete(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(item.uri)}`,
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${item.uri}`,
       );
       return true;
     } catch (error) {
@@ -372,7 +399,7 @@ class StudioWebServerAdapter implements ContentAdapter {
 
       const content = buffer ? Buffer.from(buffer).toString() : "";
       await axios.post(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(filePath)}`,
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${filePath}`,
         content,
         {
           params: { ct: "text/plain;charset=UTF-8" },
@@ -408,7 +435,7 @@ class StudioWebServerAdapter implements ContentAdapter {
 
       // Create directory by POSTing with a trailing slash
       await axios.post(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(folderPath)}/`,
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${folderPath}/`,
         "",
         {
           params: { ct: "text/plain;charset=UTF-8" },

@@ -14,6 +14,18 @@ import { getColumnIconType } from "../util";
 import { ensureCredentials } from "./index";
 import { getAxios, getCredentials } from "./state";
 
+/** Tree node returned by the /libdata/{sessionId}/libraries endpoint. */
+interface LibdataNode {
+  name: string;
+  readOnly?: string | boolean;
+  engine?: string;
+  path?: string;
+  children?: LibdataNode[];
+  /** Present on table-level nodes */
+  member?: string;
+  type?: string;
+}
+
 class StudioWebLibraryAdapter implements LibraryAdapter {
   public async connect(): Promise<void> {
     // no-op: session is handled by StudioWebSession
@@ -24,28 +36,47 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
   }
 
   public async getLibraries(): Promise<{ items: LibraryItem[]; count: number }> {
+    console.log("[StudioWeb] getLibraries called");
     if (!(await ensureCredentials())) {
+      console.warn("[StudioWeb] getLibraries: ensureCredentials returned false");
       return { items: [], count: 0 };
     }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
+      console.warn("[StudioWeb] getLibraries: no axios or creds");
       return { items: [], count: 0 };
     }
+    console.log("[StudioWeb] getLibraries: sessionId =", creds.sessionId, "baseURL =", axios.defaults.baseURL);
 
     try {
-      const response = await axios.get(
-        `/libdata/${creds.sessionId}/libraries`,
+      const url = `/libdata/${creds.sessionId}/libraries`;
+      console.log("[StudioWeb] getLibraries GET", url);
+      const response = await axios.get(url, {
+        headers: { "Content-Type": "application/json" },
+      });
+      console.log(
+        "[StudioWeb] getLibraries status:",
+        response.status,
+        "data type:",
+        typeof response.data,
+        "data:",
+        JSON.stringify(response.data),
       );
-      const rawItems: Array<Record<string, unknown>> =
-        response.data?.items ?? [];
+      const parsed: LibdataNode =
+        typeof response.data === "string"
+          ? JSON.parse(response.data)
+          : response.data;
+      const rawItems: LibdataNode[] = Array.isArray(parsed)
+        ? parsed
+        : (parsed?.children ?? []);
+      console.log("[StudioWeb] getLibraries rawItems count:", rawItems.length);
 
       const libraries: LibraryItem[] = rawItems.map((entry) => {
-        const libref = String(entry.libref ?? "");
-        const readOnlyRaw = entry.readOnly;
+        const libref = entry.name;
         const readOnly =
-          readOnlyRaw === true ||
-          String(readOnlyRaw).toLowerCase() === "yes";
+          entry.readOnly === true ||
+          String(entry.readOnly).toLowerCase() === "yes";
         return {
           type: "library",
           uid: libref,
@@ -55,9 +86,15 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
         };
       });
 
+      console.log(
+        "[StudioWeb] getLibraries returning",
+        libraries.length,
+        "libraries:",
+        libraries.map((l) => l.name),
+      );
       return { items: libraries, count: -1 };
     } catch (error) {
-      console.error("StudioWebLibraryAdapter.getLibraries error:", error);
+      console.error("[StudioWeb] getLibraries error:", error);
       return { items: [], count: 0 };
     }
   }
@@ -72,14 +109,29 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
     }
 
     try {
-      const response = await axios.get(
-        `/libdata/${creds.sessionId}/libraries~${item.name}`,
+      const url = `/libdata/${creds.sessionId}/libraries~${item.name}`;
+      console.log("[StudioWeb] getTables GET", url);
+      const response = await axios.get(url, {
+        headers: { "Content-Type": "application/json" },
+      });
+      console.log(
+        "[StudioWeb] getTables status:",
+        response.status,
+        "data type:",
+        typeof response.data,
+        "data:",
+        JSON.stringify(response.data),
       );
-      const rawItems: Array<Record<string, unknown>> =
-        response.data?.items ?? [];
+      const parsed: LibdataNode =
+        typeof response.data === "string"
+          ? JSON.parse(response.data)
+          : response.data;
+      const rawItems: LibdataNode[] = Array.isArray(parsed)
+        ? parsed
+        : (parsed?.children ?? []);
 
       const tables: LibraryItem[] = rawItems.map((entry) => {
-        const tableName = String(entry.member ?? "");
+        const tableName = entry.name;
         return {
           type: "table",
           uid: `${item.name}.${tableName}`,
@@ -173,7 +225,7 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
       const table = item.name;
 
       // Build dataset options for firstobs/obs
-      const datasetOptions = `firstobs=${start + 1} obs=${start + limit}`;
+      const datasetOptions = `firstobs=${start + 1} obs=${start + limit + 1}`;
 
       // Build WHERE clause
       let whereClause = "";
@@ -208,8 +260,8 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
         `/sessions/${creds.sessionId}/sql`,
         sql,
         {
-          params: { numobs: limit + 1 },
-          headers: { "Content-Type": "application/json" },
+          params: { numobs: limit },
+          headers: { "Content-Type": "text/plain; charset=UTF-8" },
         },
       );
 
@@ -269,7 +321,7 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
         `/sessions/${creds.sessionId}/sql`,
         sql,
         {
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "text/plain; charset=UTF-8" },
         },
       );
 
