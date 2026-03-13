@@ -305,7 +305,7 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
 
   public async getTableRowCount(
     item: LibraryItem,
-  ): Promise<{ rowCount: number; maxNumberOfRowsToRead: number }> {
+  ): Promise<{ rowCount: number; maxNumberOfRowsToRead: number; columnCount?: number }> {
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
@@ -313,22 +313,24 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
     }
 
     try {
-      const lib = item.library ?? item.name;
-      const table = item.name;
-      const sql = `select count(*) as N from ${lib}.'${table}'n`;
-
       const response = await axios.post(
-        `/sessions/${creds.sessionId}/sql`,
-        sql,
+        `/sessions/${creds.sessionId}/tables/${item.library}/${item.name}/`,
         {
-          headers: { "Content-Type": "text/plain; charset=UTF-8" },
+          isMultipleWorkspace: "",
+          serverName: "",
+          dataSetKey: "",
+          clearCache: "false",
+        },
+        {
+          params: { getViewColumnCount: "true" },
+          headers: { "Content-Type": "application/json" },
         },
       );
 
-      const rows: string[][] = response.data?.rows ?? [];
-      const rowCount = rows[0]?.[0] !== undefined ? parseInt(String(rows[0][0]), 10) : 0;
+      const rowCount = response.data?.numRows ?? 0;
+      const columnCount = response.data?.numColumns;
 
-      return { rowCount: isNaN(rowCount) ? 0 : rowCount, maxNumberOfRowsToRead: 100 };
+      return { rowCount: Number(rowCount), maxNumberOfRowsToRead: 100, columnCount: columnCount !== undefined ? Number(columnCount) : undefined };
     } catch (error) {
       console.error("StudioWebLibraryAdapter.getTableRowCount error:", error);
       return { rowCount: 0, maxNumberOfRowsToRead: 100 };

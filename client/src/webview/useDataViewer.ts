@@ -94,6 +94,8 @@ const clearFetchColumnsTimeout = () =>
 const fetchColumns = (): Promise<{
   columns: Column[];
   viewProperties?: ViewProperties;
+  rowCount?: number;
+  columnCount?: number;
 }> => {
   const requestKey = v4();
   vscode.postMessage({ command: "request:loadColumns", key: requestKey });
@@ -131,6 +133,12 @@ const useDataViewer = () => {
   const gridRef = useRef<AgGridReact>(null);
   const [columns, setColumns] = useState<ColDef[]>([]);
   const [columnMenu, setColumnMenu] = useState<ColumnMenuProps | undefined>();
+  const [totalRowCount, setTotalRowCount] = useState<number | undefined>(
+    undefined,
+  );
+  const [totalColumnCount, setTotalColumnCount] = useState<number | undefined>(
+    undefined,
+  );
   const [queryParams, setQueryParamsState] = useState<TableQuery | undefined>(
     undefined,
   );
@@ -162,6 +170,9 @@ const useDataViewer = () => {
         }
 
         const { rows, count } = tableData;
+        if (count !== -1) {
+          setTotalRowCount(count);
+        }
         const rowData = rows.map(({ cells }) => {
           const row = cells.reduce(
             (carry, cell, index) => ({
@@ -223,6 +234,7 @@ const useDataViewer = () => {
 
   const refreshResults = useCallback(
     (query: TableQuery | undefined) => {
+      setTotalRowCount(undefined);
       const params = queryParams ? { ...queryParams, ...(query || {}) } : query;
       setQueryParams(params);
       gridRef.current.api.setGridOption("datasource", dataSource(params));
@@ -252,11 +264,17 @@ const useDataViewer = () => {
       return;
     }
 
-    fetchColumns().then(({ columns: columnsData, viewProperties }) => {
+    fetchColumns().then(({ columns: columnsData, viewProperties, rowCount, columnCount }) => {
       if (viewProperties.columnState && viewProperties.columnState.length > 0) {
         columnStateRef.current = viewProperties.columnState;
       }
       loadedViewPropertiesRef.current = viewProperties;
+      if (rowCount !== undefined) {
+        setTotalRowCount(rowCount);
+      }
+      if (columnCount !== undefined) {
+        setTotalColumnCount(columnCount);
+      }
 
       const columns: ColDef[] = columnsData.map((column) => ({
         field: column.name,
@@ -328,6 +346,8 @@ const useDataViewer = () => {
     gridRef,
     onGridReady,
     refreshResults,
+    totalRowCount,
+    totalColumnCount,
     viewProperties: () => loadedViewPropertiesRef.current,
   };
 };
