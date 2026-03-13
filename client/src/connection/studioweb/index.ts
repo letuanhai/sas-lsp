@@ -12,24 +12,6 @@ export type { Config };
 let sessionInstance: StudioWebSession;
 
 /**
- * Removes the ODS HTML5 wrapper that SASCodeDocument.wrapCodeWithOutputHtml
- * injects around submitted code. SAS Studio handles output rendering natively,
- * so the wrapper is not needed and causes a file-permission error when SAS
- * tries to write the body file to the application directory.
- */
-function stripOdsWrapper(code: string): string {
-  return code
-    .replace(
-      /title;footnote;ods _all_ close;\n ods graphics on;\n ods html5\(id=vscode\)[^\n]*;\n/,
-      "",
-    )
-    .replace(
-      /\n;[*]';[*]";[*]\/;run;quit;ods html5\(id=vscode\) close;\n?$/,
-      "",
-    );
-}
-
-/**
  * Converts HTML log chunk to plain-text lines, preserving line breaks from
  * block-level elements before stripping all remaining tags.
  */
@@ -126,10 +108,9 @@ export class StudioWebSession extends Session {
     this._submissionId = undefined;
     const { sessionId } = credentials;
 
-    // Submit code, removing the ODS HTML5 wrapper injected by SASCodeDocument
     const { data: submission } = await axiosInstance.post(
       `/sessions/${sessionId}/asyncSubmissions`,
-      stripOdsWrapper(code),
+      code,
       {
         params: { label: "Program", uri: "Program" },
         headers: { "Content-Type": "text/plain; charset=UTF-8" },
@@ -170,25 +151,26 @@ export class StudioWebSession extends Session {
             }
           }
         } else if (messageType === "SubmitComplete") {
+          console.log("[StudioWeb] SubmitComplete payload:", JSON.stringify(payload, null, 2));
+
           const resultsLink = payload?.links?.find(
-            (link: { rel: string; href: string }) => link.rel === "results",
+            (link: { rel: string; uri: string }) => link.rel === "results",
           );
+          console.log("[StudioWeb] resultsLink:", resultsLink);
 
-          if (resultsLink?.href) {
+          if (resultsLink?.uri) {
             try {
-              // Build an absolute URL — the axios instance has baseURL set to
-              // {endpoint}/sasexec, so passing a full https:// URL bypasses it.
-              const resultsUrl = resultsLink.href.startsWith("http")
-                ? resultsLink.href
-                : `${credentials.endpoint}${resultsLink.href}`;
+              const resultsUrl = `${credentials.endpoint}${resultsLink.uri}`;
 
+              console.log("[StudioWeb] fetching results from:", resultsUrl);
               const { data: htmlContent } = await axiosInstance.get(resultsUrl);
+              console.log("[StudioWeb] htmlContent type:", typeof htmlContent, "length:", typeof htmlContent === "string" ? htmlContent.length : "n/a");
 
               if (typeof htmlContent === "string" && htmlContent.trim()) {
                 runResult = { html5: htmlContent, title: "Result" };
               }
-            } catch {
-              // If fetching results fails, continue without results
+            } catch (err) {
+              console.error("[StudioWeb] failed to fetch results:", err);
             }
           }
 
