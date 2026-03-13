@@ -11,6 +11,7 @@ import {
 } from "../../components/LibraryNavigator/types";
 import { ColumnCollection, TableInfo } from "../rest/api/compute";
 import { getColumnIconType } from "../util";
+import { ensureCredentials } from "./index";
 import { getAxios, getCredentials } from "./state";
 
 class StudioWebLibraryAdapter implements LibraryAdapter {
@@ -23,6 +24,9 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
   }
 
   public async getLibraries(): Promise<{ items: LibraryItem[]; count: number }> {
+    if (!(await ensureCredentials())) {
+      return { items: [], count: 0 };
+    }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {

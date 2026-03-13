@@ -86,4 +86,4 @@ The `SAS.studioweb.newSession` command (registered in `node/extension.ts`) close
 | `SAS.canSignIn` | All types except SSH and StudioWeb |
 | `SAS.librariesEnabled` | All types except SSH |
 | `SAS.serverEnabled` | All types except SSH |
-| `SAS.contentEnabled` | REST (Viya) only |
+| `SAS.contentEnabled` | REST (Viya) and StudioWeb |

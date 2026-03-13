@@ -22,6 +22,7 @@ import {
 } from "../../components/ContentNavigator/utils";
 import { ProfileWithFileRootOptions } from "../../components/profile";
 import { getResourceId, getSasServerUri } from "../rest/util";
+import { ensureCredentials } from "./index";
 import { getAxios, getCredentials } from "./state";
 
 /** Encode a filesystem path for the ~~ds~~ workspace API segment. */
@@ -109,6 +110,9 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async getChildItems(parentItem: ContentItem): Promise<ContentItem[]> {
+    if (!(await ensureCredentials())) {
+      return [];
+    }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
