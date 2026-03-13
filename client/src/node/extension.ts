@@ -56,6 +56,7 @@ import { NotebookController } from "../components/notebook/Controller";
 import { NotebookSerializer } from "../components/notebook/Serializer";
 import { exportNotebook, saveOutput } from "../components/notebook/exporters";
 import { ConnectionType } from "../components/profile";
+import { promptNewSession } from "../connection/studioweb";
 import { SasTaskProvider } from "../components/tasks/SasTaskProvider";
 import { SAS_TASK_TYPE } from "../components/tasks/SasTasks";
 
@@ -160,6 +161,10 @@ export function activate(context: ExtensionContext) {
         silent === true ? undefined : l10n.t("The SAS session has closed."),
       );
     }),
+    commands.registerCommand("SAS.studioweb.newSession", async () => {
+      commands.executeCommand("SAS.close", true);
+      await promptNewSession();
+    }),
     commands.registerCommand("SAS.switchProfile", switchProfile),
     commands.registerCommand("SAS.addProfile", addProfile),
     commands.registerCommand("SAS.deleteProfile", deleteProfile),
@@ -231,7 +236,9 @@ function updateViewSettings(): void {
 
   const settings = {
     canSignIn:
-      !activeProfile || activeProfile.connectionType !== ConnectionType.SSH,
+      !activeProfile ||
+      (activeProfile.connectionType !== ConnectionType.SSH &&
+        activeProfile.connectionType !== ConnectionType.StudioWeb),
     librariesEnabled: false,
     contentEnabled: false,
     librariesDisplayed: false,

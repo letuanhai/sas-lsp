@@ -6,12 +6,14 @@ import {
   AuthType,
   ConnectionType,
   ProfileConfig,
+  StudioWebProfile,
   ViyaProfile,
   toAutoExecLines,
 } from "../components/profile";
 import { getSession as getITCSession } from "./itc";
 import { ITCProtocol } from "./itc/types";
 import { Config as RestConfig, getSession as getRestSession } from "./rest";
+import { Config as StudioWebConfig, getSession as getStudioWebSession } from "./studioweb";
 import {
   Error2 as ComputeError,
   LogLine as ComputeLogLine,
@@ -58,6 +60,8 @@ export function getSession(): Session {
       return getITCSession(validProfile.profile, ITCProtocol.COM);
     case ConnectionType.IOM:
       return getITCSession(validProfile.profile, ITCProtocol.IOMBridge);
+    case ConnectionType.StudioWeb:
+      return getStudioWebSession(toStudioWebConfig(validProfile.profile));
     default:
       throw new Error(
         l10n.t("Invalid connectionType. Check Profile settings."),
@@ -72,6 +76,19 @@ export function getSession(): Session {
  */
 function toRestConfig(profile: ViyaProfile): RestConfig {
   const mapped: RestConfig = profile;
+  if (profile.autoExec) {
+    mapped.autoExecLines = toAutoExecLines(profile.autoExec);
+  }
+  return mapped;
+}
+
+/**
+ * Translates a {@link StudioWebProfile} interface to a {@link StudioWebConfig} interface.
+ * @param profile an input StudioWebProfile to translate.
+ * @returns StudioWebConfig instance derived from the input profile.
+ */
+function toStudioWebConfig(profile: StudioWebProfile): StudioWebConfig {
+  const mapped: StudioWebConfig = { ...profile };
   if (profile.autoExec) {
     mapped.autoExecLines = toAutoExecLines(profile.autoExec);
   }
