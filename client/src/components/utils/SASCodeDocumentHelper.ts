@@ -41,7 +41,7 @@ export function getCodeDocumentConstructionParameters(
     preamble: addition?.preamble,
     postamble: addition?.postamble,
     htmlStyle: getHtmlStyleValue(),
-    outputHtml: isOutputHtmlEnabled(),
+    outputHtml: isOutputHtmlEnabled() && !connectionTypeIsStudioWeb(),
     uuid,
     checkKeyword: async (lineNumber: number, ...keywords: string[]) => {
       const codeLines = textDocument.getText().split("\n");
@@ -89,6 +89,13 @@ function connectionTypeIsNotRest(): boolean {
   return (
     activeProfile &&
     activeProfile.profile.connectionType !== ConnectionType.Rest
+  );
+}
+
+function connectionTypeIsStudioWeb(): boolean {
+  return (
+    profileConfig.getActiveProfileDetail()?.profile.connectionType ===
+    ConnectionType.StudioWeb
   );
 }
 

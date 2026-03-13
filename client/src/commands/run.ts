@@ -23,7 +23,6 @@ import {
 import { sasDiagnostic } from "../components/logViewer/sasDiagnostics";
 import { SASCodeDocument } from "../components/utils/SASCodeDocument";
 import { getCodeDocumentConstructionParameters } from "../components/utils/SASCodeDocumentHelper";
-import { isOutputHtmlEnabled } from "../components/utils/settings";
 import { ErrorRepresentation, getSession } from "../connection";
 import { useRunStore } from "../store";
 import { profileConfig, switchProfile } from "./profile";
@@ -94,7 +93,6 @@ async function runCode(selected?: boolean, uri?: Uri) {
     return;
   }
 
-  const outputHtml = isOutputHtmlEnabled();
   const editor = uri
     ? window.visibleTextEditors.find(
         (editor) => editor.document.uri.toString() === uri.toString(),
@@ -135,7 +133,7 @@ async function runCode(selected?: boolean, uri?: Uri) {
       return session
         .run(codeDoc.getWrappedCode(), { baseDirectory: basePath })
         .then((results) => {
-          if (outputHtml && results.html5) {
+          if (results.html5) {
             showResult(results.html5, uri);
           }
         });
@@ -246,9 +244,7 @@ async function _runTask(
     : session
         .run(codeDoc.getWrappedCode(), { baseDirectory: basePath })
         .then((results) => {
-          const outputHtml = isOutputHtmlEnabled();
-
-          if (outputHtml && results.html5) {
+          if (results.html5) {
             messageEmitter.fire(l10n.t("Show results...") + "\r\n");
             showResult(
               results.html5,
