@@ -415,36 +415,49 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
   }
 
   public async getTableInfo(item: LibraryItem): Promise<TableInfo> {
-    const basicInfo: TableInfo = {
-      bookmarkLength: 0,
-      columnCount: 0,
-      compressionRoutine: "",
-      creationTimeStamp: "",
-      encoding: "",
-      engine: "",
-      extendedType: "",
-      label: "",
-      libref: item.library,
-      logicalRecordCount: 0,
-      modifiedTimeStamp: "",
-      name: item.name,
-      physicalRecordCount: 0,
-      recordLength: 0,
-      rowCount: 0,
-      type: "DATA",
-    };
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return { name: item.name, libref: item.library };
+    }
 
     try {
-      const { rowCount } = await this.getTableRowCount(item);
+      const response = await axios.post(
+        `/sessions/${creds.sessionId}/tables/${item.library}/${item.name}/`,
+        {
+          isMultipleWorkspace: "",
+          serverName: "",
+          dataSetKey: "",
+          clearCache: "false",
+        },
+        {
+          params: { getViewColumnCount: "true" },
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+      const d = response.data ?? {};
+      const rowCount = Number(d.numRows ?? 0);
+      const toIso = (epochMs: unknown) =>
+        epochMs ? new Date(Number(epochMs)).toISOString() : undefined;
+
       return {
-        ...basicInfo,
+        name: d.name ?? item.name,
+        libref: d.library ?? item.library,
+        type: d.dataType ?? d.type ?? "DATA",
+        label: d.desc ?? "",
+        engine: d.engine ?? "",
+        id: d.id,
         rowCount,
+        columnCount: Number(d.numColumns ?? 0),
         logicalRecordCount: rowCount,
         physicalRecordCount: rowCount,
+        creationTimeStamp: toIso(d.createDate),
+        modifiedTimeStamp: toIso(d.modifiedDate),
       };
     } catch (error) {
       console.warn("StudioWebLibraryAdapter.getTableInfo error:", error);
-      return basicInfo;
+      return { name: item.name, libref: item.library };
     }
   }
 }
