@@ -251,7 +251,8 @@ function updateViewSettings(): void {
     settings.serverEnabled =
       activeProfile.connectionType !== ConnectionType.SSH;
     settings.contentEnabled =
-      activeProfile.connectionType === ConnectionType.Rest;
+      activeProfile.connectionType === ConnectionType.Rest ||
+      activeProfile.connectionType === ConnectionType.StudioWeb;
   }
 
   Object.entries(settings).forEach(([key, value]) =>

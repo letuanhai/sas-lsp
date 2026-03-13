@@ -4,6 +4,8 @@ import { l10n, window } from "vscode";
 
 import { RunResult } from "..";
 import { updateStatusBarItem } from "../../components/StatusBarItem";
+import { ConnectionType } from "../../components/profile";
+import { profileConfig } from "../../commands/profile";
 import { Session } from "../session";
 import { getAxios, getCredentials, setCredentials } from "./state";
 import { Config } from "./types";
@@ -215,6 +217,51 @@ export class StudioWebSession extends Session {
   public sessionId(): string | undefined {
     return getCredentials()?.sessionId;
   }
+}
+
+/**
+ * Ensures credentials are set, prompting the user if they are not.
+ * Returns true if credentials are available after the call, false if the user cancelled.
+ */
+export async function ensureCredentials(): Promise<boolean> {
+  if (getCredentials()) {
+    return true;
+  }
+
+  const activeProfileDetail = profileConfig.getActiveProfileDetail();
+  const profile = activeProfileDetail?.profile;
+  const endpoint =
+    profile?.connectionType === ConnectionType.StudioWeb
+      ? profile.endpoint
+      : (sessionInstance?.configEndpoint ?? "");
+
+  if (!endpoint) {
+    return false;
+  }
+
+  const sessionId = await window.showInputBox({
+    title: l10n.t("SAS Studio Session ID"),
+    placeHolder: l10n.t("Enter your SAS Studio remote session ID"),
+    ignoreFocusOut: true,
+  });
+
+  if (sessionId === undefined) {
+    return false;
+  }
+
+  const cookieString = await window.showInputBox({
+    title: l10n.t("SAS Studio Session Cookie"),
+    placeHolder: l10n.t("Enter session cookie (e.g. cookieName=value)"),
+    ignoreFocusOut: true,
+    password: true,
+  });
+
+  if (cookieString === undefined) {
+    return false;
+  }
+
+  setCredentials({ endpoint, sessionId, cookieString });
+  return true;
 }
 
 /**
