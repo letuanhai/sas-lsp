@@ -21,9 +21,11 @@ enum ConnectionOptions {
   SAS9IOM = "SAS 9.4 (remote - IOM)",
   SAS9SSH = "SAS 9.4 (remote - SSH)",
   SASViya = "SAS Viya",
+  SASStudioWeb = "SAS Studio (web)",
 }
 
 const CONNECTION_PICK_OPTS: string[] = [
+  ConnectionOptions.SASStudioWeb,
   ConnectionOptions.SASViya,
   ConnectionOptions.SAS9SSH,
   ConnectionOptions.SAS9IOM,
@@ -60,6 +62,7 @@ export enum ConnectionType {
   IOM = "iom",
   Rest = "rest",
   SSH = "ssh",
+  StudioWeb = "studioweb",
 }
 
 /**
@@ -103,7 +106,12 @@ export interface IOMProfile extends BaseProfile, ProfileWithFileRootOptions {
   port: number;
 }
 
-export type Profile = ViyaProfile | SSHProfile | COMProfile | IOMProfile;
+export interface StudioWebProfile extends BaseProfile, ProfileWithFileRootOptions {
+  connectionType: ConnectionType.StudioWeb;
+  endpoint: string;
+}
+
+export type Profile = ViyaProfile | SSHProfile | COMProfile | IOMProfile | StudioWebProfile;
 
 export enum AutoExecType {
   File = "file",
@@ -455,6 +463,11 @@ export class ProfileConfig {
         pv.error = l10n.t("Missing endpoint in active profile.");
         return pv;
       }
+    } else if (profile.connectionType === ConnectionType.StudioWeb) {
+      if (!profile.endpoint) {
+        pv.error = l10n.t("Missing endpoint in active profile.");
+        return pv;
+      }
     } else if (profile.connectionType === ConnectionType.SSH) {
       if (!profile.host) {
         pv.error = l10n.t("Missing host in active profile.");
@@ -626,6 +639,16 @@ export class ProfileConfig {
       }
 
       await this.upsertProfile(name, profileClone);
+    } else if (profileClone.connectionType === ConnectionType.StudioWeb) {
+      profileClone.endpoint = await createInputTextBox(
+        ProfilePromptType.Endpoint,
+        profileClone.endpoint,
+      );
+      if (!profileClone.endpoint) {
+        return;
+      }
+      profileClone.endpoint = profileClone.endpoint.replace(/\/$/, "");
+      await this.upsertProfile(name, profileClone);
     }
   }
 
@@ -643,6 +666,7 @@ export class ProfileConfig {
       case ConnectionType.IOM:
         return activeProfile.host;
       case ConnectionType.Rest:
+      case ConnectionType.StudioWeb:
         return activeProfile.endpoint;
     }
   }
@@ -829,6 +853,8 @@ function mapQuickPickToEnum(connectionTypePickInput: string): ConnectionType {
      more than one selectable quick pick input that uses the same underlying connection methods..
   */
   switch (connectionTypePickInput) {
+    case ConnectionOptions.SASStudioWeb:
+      return ConnectionType.StudioWeb;
     case ConnectionOptions.SASViya:
       return ConnectionType.Rest;
     case ConnectionOptions.SAS9SSH:

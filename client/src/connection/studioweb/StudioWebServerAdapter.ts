@@ -1,0 +1,477 @@
+// Copyright © 2024, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+import { FileType, Uri } from "vscode";
+
+import {
+  SAS_SERVER_ROOT_FOLDER,
+  SAS_SERVER_ROOT_FOLDERS,
+  SERVER_FOLDER_ID,
+} from "../../components/ContentNavigator/const";
+import {
+  ContentAdapter,
+  ContentItem,
+  RootFolderMap,
+} from "../../components/ContentNavigator/types";
+import {
+  ContextMenuAction,
+  ContextMenuProvider,
+  convertStaticFolderToContentItem,
+  createStaticFolder,
+  homeDirectoryNameAndType,
+  sortedContentItems,
+} from "../../components/ContentNavigator/utils";
+import { ProfileWithFileRootOptions } from "../../components/profile";
+import { getResourceId, getSasServerUri } from "../rest/util";
+import { getAxios, getCredentials } from "./state";
+
+/** Encode a filesystem path for the ~~ds~~ workspace API segment. */
+function encodeWorkspacePath(filePath: string): string {
+  // The API uses ~~ds~~ as a prefix then the raw path; forward slashes are kept as-is.
+  // We do not double-encode, just pass the path directly after the prefix.
+  return filePath;
+}
+
+interface WorkspaceEntry {
+  name: string;
+  uri?: string;
+  path?: string;
+  type?: string;   // "file" | "directory" | "dir"
+  isDirectory?: boolean;
+  category?: number; // 0 = directory, 1+ = file
+  modifiedTimeStamp?: string | number;
+  creationTimeStamp?: string | number;
+  size?: number;
+  parentFolderUri?: string;
+}
+
+class StudioWebServerAdapter implements ContentAdapter {
+  private rootFolders: RootFolderMap;
+  private contextMenuProvider: ContextMenuProvider;
+
+  public constructor(
+    protected readonly fileNavigationCustomRootPath: ProfileWithFileRootOptions["fileNavigationCustomRootPath"],
+    protected readonly fileNavigationRoot: ProfileWithFileRootOptions["fileNavigationRoot"],
+  ) {
+    this.rootFolders = {};
+    this.contextMenuProvider = new ContextMenuProvider(
+      [
+        ContextMenuAction.CreateChild,
+        ContextMenuAction.Delete,
+        ContextMenuAction.Update,
+        ContextMenuAction.CopyPath,
+        ContextMenuAction.AllowDownload,
+      ],
+      {
+        [ContextMenuAction.CopyPath]: (item) => item.id !== SERVER_FOLDER_ID,
+      },
+    );
+  }
+
+  /* Favorites / flow operations – not applicable to SAS Server */
+  public async addChildItem(): Promise<boolean> {
+    throw new Error("Method not implemented");
+  }
+  public async addItemToFavorites(): Promise<boolean> {
+    throw new Error("Method not implemented");
+  }
+  public removeItemFromFavorites(): Promise<boolean> {
+    throw new Error("Method not implemented");
+  }
+  public getRootFolder(): ContentItem | undefined {
+    return undefined;
+  }
+
+  public async connect(_baseUrl: string): Promise<void> {
+    // no-op: credentials are managed by StudioWebSession via state.ts
+  }
+
+  public connected(): boolean {
+    return true;
+  }
+
+  public async getFolderPathForItem(): Promise<string> {
+    return "";
+  }
+
+  public async getRootItems(): Promise<RootFolderMap> {
+    for (let index = 0; index < SAS_SERVER_ROOT_FOLDERS.length; ++index) {
+      const delegateFolderName = SAS_SERVER_ROOT_FOLDERS[index];
+      this.rootFolders[delegateFolderName] = {
+        uid: `${index}`,
+        ...convertStaticFolderToContentItem(SAS_SERVER_ROOT_FOLDER, {
+          write: false,
+          delete: false,
+          addMember: false,
+        }),
+      };
+    }
+    return this.rootFolders;
+  }
+
+  public async getChildItems(parentItem: ContentItem): Promise<ContentItem[]> {
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return [];
+    }
+
+    // Root folder: fetch the home/starting directory entry
+    if (parentItem.id === SERVER_FOLDER_ID) {
+      try {
+        const response = await axios.get(`/${creds.sessionId}/_root_`);
+        const data = response.data;
+
+        // The _root_ response may be a single entry or an array; normalise to array
+        const entries: WorkspaceEntry[] = Array.isArray(data)
+          ? data
+          : data
+          ? [data]
+          : [];
+
+        if (entries.length === 0) {
+          return [];
+        }
+
+        // Use first entry to determine the home directory uri
+        const firstEntry = entries[0];
+        const homeUri =
+          firstEntry.parentFolderUri ??
+          firstEntry.uri ??
+          firstEntry.path ??
+          "/";
+
+        const [homeName, homeType] = homeDirectoryNameAndType(
+          this.fileNavigationRoot,
+          this.fileNavigationCustomRootPath,
+        );
+
+        const homeFolder = convertStaticFolderToContentItem(
+          createStaticFolder(
+            homeUri,
+            homeName,
+            homeType,
+            homeUri,
+            "getDirectoryMembers",
+          ),
+          {
+            write: false,
+            delete: false,
+            addMember: true,
+          },
+        );
+        homeFolder.contextValue =
+          this.contextMenuProvider.availableActions(homeFolder);
+        return [homeFolder];
+      } catch (error) {
+        console.error("StudioWebServerAdapter.getChildItems(_root_) error:", error);
+        return [];
+      }
+    }
+
+    // For normal folders, list their children via workspace API
+    try {
+      // Find the "getDirectoryMembers" link URI, which holds the directory path
+      const dirLink = parentItem.links?.find(
+        (l) => l.rel === "getDirectoryMembers",
+      );
+      const dirPath = dirLink?.uri ?? parentItem.uri;
+
+      const response = await axios.get(
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(dirPath)}`,
+      );
+
+      const data = response.data;
+      const entries: WorkspaceEntry[] = Array.isArray(data)
+        ? data
+        : data?.items
+        ? data.items
+        : [];
+
+      const childItems = entries
+        .filter((e) => e.name) // skip unnamed entries
+        .map((entry) => this.convertEntryToContentItem(entry, dirPath));
+
+      return sortedContentItems(childItems);
+    } catch (error) {
+      console.error(
+        "StudioWebServerAdapter.getChildItems error for",
+        parentItem.uri,
+        error,
+      );
+      return [];
+    }
+  }
+
+  private convertEntryToContentItem(
+    entry: WorkspaceEntry,
+    parentPath: string,
+  ): ContentItem {
+    const isDir =
+      entry.isDirectory === true ||
+      entry.category === 0 ||
+      entry.type === "directory" ||
+      entry.type === "dir";
+
+    const fileType = isDir ? FileType.Directory : FileType.File;
+    const name = entry.name ?? "";
+
+    // Build the full path
+    const uri =
+      entry.uri ??
+      entry.path ??
+      (parentPath.endsWith("/")
+        ? `${parentPath}${name}`
+        : `${parentPath}/${name}`);
+
+    const modifiedTimeStamp = entry.modifiedTimeStamp
+      ? typeof entry.modifiedTimeStamp === "number"
+        ? entry.modifiedTimeStamp
+        : new Date(String(entry.modifiedTimeStamp).replace(/[^0-9]/g, "")).getTime() || 0
+      : 0;
+
+    const creationTimeStamp = entry.creationTimeStamp
+      ? typeof entry.creationTimeStamp === "number"
+        ? entry.creationTimeStamp
+        : new Date(String(entry.creationTimeStamp)).getTime() || 0
+      : 0;
+
+    const links = [
+      isDir && {
+        method: "GET",
+        rel: "getDirectoryMembers",
+        href: uri,
+        uri: uri,
+        type: "GET",
+      },
+      { method: "GET", rel: "self", href: uri, uri: uri, type: "GET" },
+    ].filter(Boolean) as ContentItem["links"];
+
+    const item: ContentItem = {
+      id: uri,
+      uri,
+      name,
+      creationTimeStamp,
+      modifiedTimeStamp,
+      links,
+      parentFolderUri: entry.parentFolderUri ?? parentPath,
+      permission: {
+        write: true,
+        delete: true,
+        addMember: isDir,
+      },
+      type: "",
+      fileStat: {
+        ctime: 0,
+        mtime: modifiedTimeStamp,
+        size: entry.size ?? 0,
+        type: fileType,
+      },
+    };
+
+    return {
+      ...item,
+      contextValue: this.contextMenuProvider.availableActions(item),
+      vscUri: getSasServerUri(item, false),
+    };
+  }
+
+  public async getContentOfItem(item: ContentItem): Promise<string> {
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return "";
+    }
+
+    try {
+      const response = await axios.get(
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(item.uri)}`,
+        {
+          params: { ct: "text/plain;charset=UTF-8" },
+          responseType: "text",
+          transformResponse: [(data) => data],
+        },
+      );
+      return String(response.data ?? "");
+    } catch (error) {
+      console.error("StudioWebServerAdapter.getContentOfItem error:", error);
+      return "";
+    }
+  }
+
+  public async getContentOfUri(uri: Uri): Promise<string> {
+    const path = getResourceId(uri);
+    const item = await this.getItemAtPath(path);
+    return (await this.getContentOfItem(item)) || "";
+  }
+
+  public async getItemOfUri(uri: Uri): Promise<ContentItem> {
+    const path = getResourceId(uri);
+    return this.getItemAtPath(path);
+  }
+
+  public async updateContentOfItem(uri: Uri, content: string): Promise<void> {
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return;
+    }
+
+    try {
+      const path = getResourceId(uri);
+      await axios.post(
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(path)}`,
+        content,
+        {
+          params: { ct: "text/plain;charset=UTF-8" },
+          headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        },
+      );
+    } catch (error) {
+      console.error("StudioWebServerAdapter.updateContentOfItem error:", error);
+    }
+  }
+
+  public async deleteItem(item: ContentItem): Promise<boolean> {
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return false;
+    }
+
+    try {
+      await axios.delete(
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(item.uri)}`,
+      );
+      return true;
+    } catch (error) {
+      console.error("StudioWebServerAdapter.deleteItem error:", error);
+      return false;
+    }
+  }
+
+  public async createNewItem(
+    parentItem: ContentItem,
+    fileName: string,
+    buffer?: ArrayBufferLike,
+  ): Promise<ContentItem | undefined> {
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return undefined;
+    }
+
+    try {
+      const parentPath = parentItem.uri;
+      const filePath = parentPath.endsWith("/")
+        ? `${parentPath}${fileName}`
+        : `${parentPath}/${fileName}`;
+
+      const content = buffer ? Buffer.from(buffer).toString() : "";
+      await axios.post(
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(filePath)}`,
+        content,
+        {
+          params: { ct: "text/plain;charset=UTF-8" },
+          headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        },
+      );
+
+      return this.convertEntryToContentItem(
+        { name: fileName, uri: filePath, isDirectory: false },
+        parentPath,
+      );
+    } catch (error) {
+      console.error("StudioWebServerAdapter.createNewItem error:", error);
+      return undefined;
+    }
+  }
+
+  public async createNewFolder(
+    parentItem: ContentItem,
+    folderName: string,
+  ): Promise<ContentItem | undefined> {
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return undefined;
+    }
+
+    try {
+      const parentPath = parentItem.uri;
+      const folderPath = parentPath.endsWith("/")
+        ? `${parentPath}${folderName}`
+        : `${parentPath}/${folderName}`;
+
+      // Create directory by POSTing with a trailing slash
+      await axios.post(
+        `/sessions/${creds.sessionId}/workspace/~~ds~~${encodeWorkspacePath(folderPath)}/`,
+        "",
+        {
+          params: { ct: "text/plain;charset=UTF-8" },
+          headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        },
+      );
+
+      return this.convertEntryToContentItem(
+        { name: folderName, uri: folderPath, isDirectory: true },
+        parentPath,
+      );
+    } catch (error) {
+      console.error("StudioWebServerAdapter.createNewFolder error:", error);
+      return undefined;
+    }
+  }
+
+  public async renameItem(
+    _item: ContentItem,
+    _newName: string,
+  ): Promise<ContentItem | undefined> {
+    // Rename is not directly supported by the Studio Web workspace API
+    return undefined;
+  }
+
+  public async moveItem(
+    _item: ContentItem,
+    _targetParentFolderUri: string,
+  ): Promise<Uri | undefined> {
+    // Move is not directly supported by the Studio Web workspace API
+    return undefined;
+  }
+
+  public async getParentOfItem(
+    item: ContentItem,
+  ): Promise<ContentItem | undefined> {
+    if (!item.parentFolderUri) {
+      return undefined;
+    }
+    try {
+      return await this.getItemAtPath(item.parentFolderUri);
+    } catch {
+      return undefined;
+    }
+  }
+
+  public async getPathOfItem(item: ContentItem): Promise<string> {
+    return item.uri;
+  }
+
+  public async getUriOfItem(item: ContentItem): Promise<Uri> {
+    return item.vscUri;
+  }
+
+  /** Retrieve a ContentItem for a given filesystem path. */
+  private async getItemAtPath(path: string): Promise<ContentItem> {
+    // Derive parent path and name from the path
+    const normalised = path.replace(/\/$/, "");
+    const lastSlash = normalised.lastIndexOf("/");
+    const name = lastSlash >= 0 ? normalised.slice(lastSlash + 1) : normalised;
+    const parentPath = lastSlash > 0 ? normalised.slice(0, lastSlash) : "/";
+
+    return this.convertEntryToContentItem(
+      { name, uri: path, isDirectory: false },
+      parentPath,
+    );
+  }
+}
+
+export default StudioWebServerAdapter;
