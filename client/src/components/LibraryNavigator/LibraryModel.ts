@@ -230,7 +230,7 @@ class LibraryModel {
             libraryItem.readOnly !== undefined
               ? libraryItem.readOnly
               : library?.readOnly || false,
-          type,
+          type: libraryItem.type ?? type,
         }),
       )
       .sort(sortById);

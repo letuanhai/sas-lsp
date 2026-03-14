@@ -8,6 +8,7 @@ import {
   TableData,
   TableQuery,
   TableRow,
+  ViewType,
 } from "../../components/LibraryNavigator/types";
 import { ColumnCollection, TableInfo } from "../rest/api/compute";
 import { getColumnIconType } from "../util";
@@ -103,8 +104,11 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
 
       const tables: LibraryItem[] = rawItems.map((entry) => {
         const tableName = entry.name;
+        const isView =
+          String(entry.type ?? "").toUpperCase() === "VIEW" ||
+          String(entry.member ?? "").toUpperCase() === "VIEW";
         return {
-          type: "table",
+          type: isView ? ViewType : "table",
           uid: `${item.name}.${tableName}`,
           id: tableName,
           name: tableName,
@@ -201,16 +205,9 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
       const lib = item.library ?? item.name;
       const table = item.name;
 
-      // Build dataset options for firstobs/obs
-      const datasetOptions = `firstobs=${start + 1} obs=${start + limit}`;
-
       // Build WHERE clause
       let whereClause = "";
       if (query?.filterValue) {
-        // We filter across all columns with a CONTAINS predicate via a subquery;
-        // simpler approach: wrap in a generated where on a text search isn't easily
-        // done without column names, so we rely on the caller to pass a SQL-valid
-        // filter string, or we skip if complex. Use CONTAINS on the filter value.
         whereClause = `where (${query.filterValue})`;
       }
 
@@ -223,20 +220,22 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
         orderByClause = `order by ${sortString}`;
       }
 
-      // When sort/filter is present we need a wrapping select because
-      // dataset options (firstobs/obs) interact with ORDER BY unpredictably.
-      // Use a clean outer select for simplicity.
+      // Use firstobs/numobs query params instead of dataset options so the
+      // query works for both tables and views (views reject dataset options).
       let sql: string;
       if (whereClause || orderByClause) {
-        sql = `select * from (select * from ${lib}.'${table}'n(${datasetOptions})) ${whereClause} ${orderByClause}`.trim();
+        sql = `select * from (select * from ${lib}.'${table}'n) ${whereClause} ${orderByClause}`.trim();
       } else {
-        sql = `select * from ${lib}.'${table}'n(${datasetOptions})`;
+        sql = `select * from ${lib}.'${table}'n`;
       }
 
       const response = await axios.post(
         `/sessions/${creds.sessionId}/sql`,
         sql,
-        { headers: { "Content-Type": "text/plain; charset=UTF-8" } },
+        {
+          params: { firstobs: start + 1, numobs: limit },
+          headers: { "Content-Type": "text/plain; charset=UTF-8" },
+        },
       );
 
       const rawRows: string[][] = response.data?.rows ?? [];

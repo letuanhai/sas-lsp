@@ -28,7 +28,13 @@ import { registerAPI } from "../APIProvider";
 import { SubscriptionProvider } from "../SubscriptionProvider";
 import LibraryModel from "./LibraryModel";
 import { Icons, Messages, WorkLibraryId } from "./const";
-import { LibraryAdapter, LibraryItem, LibraryType, TableType } from "./types";
+import {
+  LibraryAdapter,
+  LibraryItem,
+  LibraryType,
+  TableType,
+  ViewType,
+} from "./types";
 
 export const libraryItemMimeType =
   "application/vnd.code.tree.librarydataprovider";
@@ -126,7 +132,7 @@ class LibraryDataProvider
           ? TreeItemCollapsibleState.Collapsed
           : TreeItemCollapsibleState.None,
       command:
-        item.type === TableType
+        item.type === TableType || item.type === ViewType
           ? {
               command: "SAS.viewTable",
               arguments: [
@@ -147,6 +153,8 @@ class LibraryDataProvider
     switch (item.type) {
       case TableType:
         return Icons.DataSet;
+      case ViewType:
+        return Icons.DataView;
       case LibraryType:
         if (item.id === WorkLibraryId) {
           return Icons.WorkLibrary;

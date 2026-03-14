@@ -15,6 +15,10 @@ export const Icons = {
     light: "icons/light/sasDataSetLight.svg",
     dark: "icons/dark/sasDataSetDark.svg",
   },
+  DataView: {
+    light: "icons/light/sasDataViewLight.svg",
+    dark: "icons/dark/sasDataViewDark.svg",
+  },
   ReadOnlyLibrary: {
     light: "icons/light/readOnlyLibraryLight.svg",
     dark: "icons/dark/readOnlyLibraryDark.svg",
