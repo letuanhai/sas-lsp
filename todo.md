@@ -129,6 +129,23 @@ Fix:
   `DropConfirmationLabel` to const.ts
 - Button labels: Cancel / Yes
 
-## Task 4: Support opening SAS dataset (.sas7bdat) in data view — not started
+## Task 4: Support opening SAS dataset (.sas7bdat) file in data view ✓
+
+### How it works (SAS Studio API)
+
+When a `.sas7bdat` file is double-clicked in SAS Studio's file browser, it:
+1. `PUT /sasexec/libdata/{sessionId}/{LIBREF}` — creates a temporary SAS library pointing to
+   the directory containing the file. Body is a libdata node with `path` set to the dir.
+2. `POST /sasexec/sessions/{sessionId}/tables/{LIBREF}/{tableName}/?getViewColumnCount=true`
+   — gets column metadata (reuses existing `getColumns` / `getTableRowCount` code).
+3. `POST /sasexec/sessions/{sessionId}/sql?numobs=N` — fetches rows (reuses `getRows`).
+
+### Fix
+
+- `StudioWebLibraryAdapter.assignTempLibrary(libref, dirPath)` — PUT to create the temp library
+- `connection/studioweb/openDataset.ts` — `openSas7bdatAsDataViewer(uri)`: generates a unique
+  libref `_FV0`…`_FV9999`, assigns temp library, builds `LibraryItem`, fires `SAS.viewTable`
+- `ContentNavigator/index.ts` `SAS.server.openItem` — detects `.sas7bdat` extension + StudioWeb
+  connection type, calls `openSas7bdatAsDataViewer` instead of `vscode.open`
 
 ## Task 5: Support read/write with server encoding (not UTF-8) — not started
