@@ -171,6 +171,16 @@ export class StudioWebSession extends Session {
             }
           }
 
+          const dataSets: Array<{ member: string; library: string }> =
+            payload?.dataSets ?? [];
+          if (dataSets.length > 0) {
+            const dataSetLines = dataSets.map(({ library, member }) => ({
+              type: "note" as const,
+              line: `NOTE: Output dataset: ${library}.${member}`,
+            }));
+            this._onExecutionLogFn?.(dataSetLines);
+          }
+
           done = true;
           break;
         }
