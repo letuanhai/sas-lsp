@@ -34,6 +34,15 @@ function encodeDirectoryPath(dirPath: string): string {
   return dirPath.replace(/\./g, "~dot~").replace(/\//g, "~ps~");
 }
 
+/**
+ * Encode a path for use in tree store REST body values (slash-only, no dot encoding).
+ * The SAS Studio 3.8 tree store IDs use `~ps~` for `/` but keep `.` as-is.
+ * Example: `/folders/myfolders/file.sas` → `~ps~folders~ps~myfolders~ps~file.sas`
+ */
+function encodeTreePath(path: string): string {
+  return path.replace(/\//g, "~ps~");
+}
+
 interface WorkspaceEntry {
   name: string;
   uri?: string;
@@ -295,6 +304,9 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async getContentOfItem(item: ContentItem): Promise<string> {
+    if (!(await ensureCredentials())) {
+      return "";
+    }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
@@ -329,6 +341,9 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async updateContentOfItem(uri: Uri, content: string): Promise<void> {
+    if (!(await ensureCredentials())) {
+      return;
+    }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
@@ -348,6 +363,9 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async deleteItem(item: ContentItem): Promise<boolean> {
+    if (!(await ensureCredentials())) {
+      return false;
+    }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
@@ -371,6 +389,9 @@ class StudioWebServerAdapter implements ContentAdapter {
     fileName: string,
     buffer?: ArrayBufferLike,
   ): Promise<ContentItem | undefined> {
+    if (!(await ensureCredentials())) {
+      return undefined;
+    }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
@@ -408,6 +429,9 @@ class StudioWebServerAdapter implements ContentAdapter {
     parentItem: ContentItem,
     folderName: string,
   ): Promise<ContentItem | undefined> {
+    if (!(await ensureCredentials())) {
+      return undefined;
+    }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
@@ -419,17 +443,32 @@ class StudioWebServerAdapter implements ContentAdapter {
       const folderPath = parentPath.endsWith("/")
         ? `${parentPath}${folderName}`
         : `${parentPath}/${folderName}`;
+      const encodedParent = encodeDirectoryPath(parentPath);
 
-      // Create directory by POSTing with a trailing slash
-      // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
-      await axios.post(
-        `/sessions/${creds.sessionId}/workspace/${folderPath}/`,
-        "",
-        {
-          params: { ct: "text/plain;charset=UTF-8" },
-          headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        },
-      );
+      // Fetch current parent folder data (children list required by the tree store PUT)
+      const parentData = (await axios.get(`/${creds.sessionId}/${encodedParent}`))
+        .data;
+
+      const parentUri = parentPath.endsWith("/") ? parentPath : `${parentPath}/`;
+      const newFolder = {
+        stub: false,
+        asciiEbcdicConversionRequired: false,
+        id: encodeTreePath(folderPath),
+        name: folderName,
+        isDirectory: true,
+        uri: folderPath,
+        uriParent: parentUri,
+        children: [],
+        haveChildren: false,
+      };
+
+      const updatedParent = {
+        ...parentData,
+        children: [...(parentData.children ?? []), newFolder],
+      };
+
+      // PUT the parent object with the new folder appended to its children
+      await axios.put(`/${creds.sessionId}/${encodedParent}`, updatedParent);
 
       return this.convertEntryToContentItem(
         { name: folderName, uri: folderPath, isDirectory: true },
@@ -442,19 +481,87 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async renameItem(
-    _item: ContentItem,
-    _newName: string,
+    item: ContentItem,
+    newName: string,
   ): Promise<ContentItem | undefined> {
-    // Rename is not directly supported by the Studio Web workspace API
-    return undefined;
+    if (!(await ensureCredentials())) {
+      return undefined;
+    }
+
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return undefined;
+    }
+
+    try {
+      await axios.post(`/${creds.sessionId}/`, {
+        operationName: "rename",
+        newName,
+        oldName: item.name,
+        parent: encodeTreePath(item.uri),
+        isPDSMember: false,
+        isNativeMVS: false,
+      });
+
+      const parentUri =
+        item.parentFolderUri ??
+        item.uri.substring(0, item.uri.lastIndexOf("/"));
+      const newUri = parentUri.endsWith("/")
+        ? `${parentUri}${newName}`
+        : `${parentUri}/${newName}`;
+      const isDir = item.fileStat?.type === FileType.Directory;
+
+      return this.convertEntryToContentItem(
+        { name: newName, uri: newUri, isDirectory: isDir },
+        parentUri,
+      );
+    } catch (error) {
+      console.error("StudioWebServerAdapter.renameItem error:", error);
+      return undefined;
+    }
   }
 
   public async moveItem(
-    _item: ContentItem,
-    _targetParentFolderUri: string,
+    item: ContentItem,
+    targetParentFolderUri: string,
   ): Promise<Uri | undefined> {
-    // Move is not directly supported by the Studio Web workspace API
-    return undefined;
+    if (!(await ensureCredentials())) {
+      return undefined;
+    }
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return undefined;
+    }
+
+    try {
+      const isDir = item.fileStat?.type === FileType.Directory;
+      const oldParentUri =
+        item.parentFolderUri ??
+        item.uri.substring(0, item.uri.lastIndexOf("/"));
+
+      await axios.post(`/${creds.sessionId}/`, {
+        operationName: "move",
+        child: item.name,
+        childURI: item.uri,
+        oldParent: encodeTreePath(oldParentUri),
+        newParent: encodeTreePath(targetParentFolderUri),
+        isNewParentPDS: "false",
+        isCopy: "false",
+        isDirectory: String(isDir),
+        isPDSMember: "false",
+        asciiEbcdicConversionRequired: false,
+      });
+
+      const newUri = targetParentFolderUri.endsWith("/")
+        ? `${targetParentFolderUri}${item.name}`
+        : `${targetParentFolderUri}/${item.name}`;
+      return Uri.parse(`sasServer:${newUri}`);
+    } catch (error) {
+      console.error("StudioWebServerAdapter.moveItem error:", error);
+      return undefined;
+    }
   }
 
   public async getParentOfItem(
