@@ -115,31 +115,20 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async getChildItems(parentItem: ContentItem): Promise<ContentItem[]> {
-    console.log("[StudioWeb] getChildItems called for id:", parentItem.id, "uri:", parentItem.uri);
     if (!(await ensureCredentials())) {
-      console.warn("[StudioWeb] getChildItems: ensureCredentials returned false");
       return [];
     }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
-      console.warn("[StudioWeb] getChildItems: no axios or creds");
       return [];
     }
-    console.log("[StudioWeb] getChildItems: sessionId =", creds.sessionId, "baseURL =", axios.defaults.baseURL);
 
     // Root folder: fetch the home/starting directory entry
     if (parentItem.id === SERVER_FOLDER_ID) {
       try {
         const rootUrl = `/${creds.sessionId}/_root_`;
-        console.log("[StudioWeb] getChildItems(_root_) GET", rootUrl);
         const response = await axios.get(rootUrl);
-        console.log(
-          "[StudioWeb] getChildItems(_root_) status:",
-          response.status,
-          "data:",
-          JSON.stringify(response.data),
-        );
         const data = response.data;
 
         // Per SASStudio-FileOperations-API.md, _root_ returns:
@@ -192,21 +181,8 @@ class StudioWebServerAdapter implements ContentAdapter {
       );
       const dirPath = dirLink?.uri ?? parentItem.uri;
       const dirUrl = `/${creds.sessionId}/${encodeDirectoryPath(dirPath)}`;
-      console.log(
-        "[StudioWeb] getChildItems GET",
-        dirUrl,
-        "(dirPath:",
-        dirPath,
-        ")",
-      );
 
       const response = await axios.get(dirUrl);
-      console.log(
-        "[StudioWeb] getChildItems status:",
-        response.status,
-        "data:",
-        JSON.stringify(response.data),
-      );
 
       const data = response.data;
       // Per SASStudio-FileOperations-API.md, folder response includes a `children` array
@@ -217,7 +193,6 @@ class StudioWebServerAdapter implements ContentAdapter {
           : data?.items
             ? data.items
             : [];
-      console.log("[StudioWeb] getChildItems entries count:", entries.length);
 
       const childItems = entries
         .filter((e) => e.name) // skip unnamed entries
