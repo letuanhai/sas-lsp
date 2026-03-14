@@ -1,4 +1,4 @@
-- [ ] show output dataset from submission
+- [x] show output dataset from submission
 
 ## Task 1: File contents pane bugs — mostly complete
 
@@ -77,10 +77,12 @@ as "opening a new file." When names match, the tab label stays the same, so it l
    is only that preview mode prevents both from being open simultaneously.
 
 **Recommended fix:** Option 1 — change the `openItem` command to use `{ preview: false }`:
+
 ```ts
 // In index.ts, line 102:
 await commands.executeCommand("vscode.open", uri, { preview: false });
 ```
+
 This is a one-line change. The `resourceUri` on the TreeItem already contains the full
 path, so VS Code will auto-disambiguate tab labels (e.g., "test.sas — folder1" vs
 "test.sas — folder2") when both are open.
