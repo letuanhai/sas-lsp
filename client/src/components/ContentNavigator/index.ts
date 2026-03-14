@@ -34,10 +34,8 @@ import {
 import { isContainer as getIsContainer } from "./utils";
 
 const fileValidator = (value: string): string | null =>
-  /^([^/<>;\\{}]+)\.\w+$/.test(
-    // file service does not allow /, <, >, ;, \, {, }
-    value,
-  )
+  // file service does not allow /, <, >, ;, \, {, } and name must not be empty
+  /^[^/<>;\\{}]+$/.test(value)
     ? null
     : Messages.FileValidationError;
 
@@ -99,6 +97,10 @@ class ContentNavigator implements SubscriptionProvider {
     const SAS = `SAS.${this.sourceType === ContentSourceType.SASContent ? "content" : "server"}`;
     return [
       ...this.contentDataProvider.getSubscriptions(),
+      commands.registerCommand(`${SAS}.openItem`, async (uri: Uri) => {
+        this.contentDataProvider.invalidateFile(uri);
+        await commands.executeCommand("vscode.open", uri);
+      }),
       commands.registerCommand(
         `${SAS}.deleteResource`,
         async (item: ContentItem) => {
@@ -189,10 +191,26 @@ class ContentNavigator implements SubscriptionProvider {
       commands.registerCommand(
         `${SAS}.addFileResource`,
         async (resource: ContentItem) => {
+          // Pre-fetch sibling names for duplicate validation in the input box
+          const existingChildren =
+            (await this.contentDataProvider.getChildren(resource)) || [];
+          const existingNames = new Set(
+            existingChildren.map((child) => child.name),
+          );
+
           const fileName = await window.showInputBox({
             prompt: Messages.NewFilePrompt,
             title: Messages.NewFileTitle,
-            validateInput: fileValidator,
+            validateInput: (value) => {
+              const basicError = fileValidator(value);
+              if (basicError) {
+                return basicError;
+              }
+              if (existingNames.has(value)) {
+                return l10n.t(Messages.FileAlreadyExistsError, { name: value });
+              }
+              return null;
+            },
           });
           if (!fileName) {
             return;
@@ -242,15 +260,38 @@ class ContentNavigator implements SubscriptionProvider {
         async (resource: ContentItem) => {
           const isContainer = getIsContainer(resource);
 
+          // Pre-fetch sibling names for duplicate validation in the input box
+          let siblingNames = new Set<string>();
+          const parentItem =
+            await this.contentDataProvider.getParent(resource);
+          if (parentItem) {
+            const siblings =
+              (await this.contentDataProvider.getChildren(parentItem)) || [];
+            siblingNames = new Set(
+              siblings
+                .filter((s) => s.name !== resource.name)
+                .map((s) => s.name),
+            );
+          }
+
           const name = await window.showInputBox({
             prompt: Messages.RenamePrompt,
             title: isContainer
               ? Messages.RenameFolderTitle
               : Messages.RenameFileTitle,
             value: resource.name,
-            validateInput: isContainer
-              ? (value) => folderValidator(value, this.sourceType)
-              : fileValidator,
+            validateInput: (value) => {
+              const basicError = isContainer
+                ? folderValidator(value, this.sourceType)
+                : fileValidator(value);
+              if (basicError) {
+                return basicError;
+              }
+              if (siblingNames.has(value)) {
+                return l10n.t(Messages.FileAlreadyExistsError, { name: value });
+              }
+              return null;
+            },
           });
           if (!name || name === resource.name) {
             return;

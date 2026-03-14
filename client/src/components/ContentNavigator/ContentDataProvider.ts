@@ -9,6 +9,7 @@ import {
   Event,
   EventEmitter,
   FileChangeEvent,
+  FileChangeType,
   FileStat,
   FileSystemProvider,
   FileType,
@@ -52,6 +53,7 @@ import {
 import {
   ContentItem,
   ContentNavigatorConfig,
+  ContentSourceType,
   FileManipulationEvent,
 } from "./types";
 import {
@@ -77,11 +79,13 @@ class ContentDataProvider
   private model: ContentModel;
   private extensionUri: Uri;
   private mimeType: string;
+  private sourceType: ContentSourceType;
 
   public dropMimeTypes: string[];
   public dragMimeTypes: string[];
 
   private uriToParentMap = new Map<string, string>();
+  private forcedMtime = new Map<string, number>();
 
   get treeView(): TreeView<ContentItem> {
     return this._treeView;
@@ -90,7 +94,7 @@ class ContentDataProvider
   constructor(
     model: ContentModel,
     extensionUri: Uri,
-    { mimeType, treeIdentifier }: ContentNavigatorConfig,
+    { mimeType, treeIdentifier, sourceType }: ContentNavigatorConfig,
   ) {
     this._onDidManipulateFile = new EventEmitter<FileManipulationEvent>();
     this._onDidChangeFile = new EventEmitter<FileChangeEvent[]>();
@@ -101,6 +105,7 @@ class ContentDataProvider
     this.dropMimeTypes = [mimeType, "text/uri-list"];
     this.dragMimeTypes = [mimeType];
     this.mimeType = mimeType;
+    this.sourceType = sourceType;
 
     this._treeView = window.createTreeView(treeIdentifier, {
       treeDataProvider: this,
@@ -130,6 +135,41 @@ class ContentDataProvider
     target: ContentItem,
     sources: DataTransfer,
   ): Promise<void> {
+    // Determine operation type and build a context-aware confirmation message
+    const internalItems: ContentItem[] = sources.get(this.mimeType)?.value ?? [];
+    const hasExternalUris = !!sources.get("text/uri-list")?.value;
+    const isMove = internalItems.length > 0;
+
+    let confirmMessage: string;
+    if (isMove) {
+      if (internalItems.length === 1) {
+        confirmMessage = l10n.t(Messages.DropConfirmationMessage, {
+          source: internalItems[0].name,
+          target: target.name,
+        });
+      } else {
+        confirmMessage = l10n.t(Messages.DropConfirmationMessageMultiple, {
+          count: internalItems.length,
+          target: target.name,
+        });
+      }
+    } else if (hasExternalUris) {
+      confirmMessage = l10n.t(Messages.DropUploadConfirmationMessage, {
+        target: target.name,
+      });
+    } else {
+      return; // nothing to drop
+    }
+
+    const confirmed = await window.showWarningMessage(
+      confirmMessage,
+      { modal: true },
+      Messages.DropConfirmationLabel,
+    );
+    if (!confirmed) {
+      return;
+    }
+
     for (const mimeType of this.dropMimeTypes) {
       const item = sources.get(mimeType);
       if (!item || !item.value) {
@@ -209,6 +249,13 @@ class ContentDataProvider
     return this._onDidManipulateFile.event;
   }
 
+  public invalidateFile(uri: Uri): void {
+    // Store a fresh timestamp so stat() returns a new mtime, which causes
+    // VS Code to call readFile() and update any open editor with fresh server content.
+    this.forcedMtime.set(uri.toString(), Date.now());
+    this._onDidChangeFile.fire([{ type: FileChangeType.Changed, uri }]);
+  }
+
   public async connect(baseUrl: string): Promise<void> {
     await this.model.connect(baseUrl);
     this.refresh();
@@ -231,7 +278,7 @@ class ContentDataProvider
       command: isContainer
         ? undefined
         : {
-            command: "vscode.open",
+            command: `SAS.${this.sourceType === ContentSourceType.SASContent ? "content" : "server"}.openItem`,
             arguments: [uri],
             title: "Open SAS File",
           },
@@ -258,6 +305,14 @@ class ContentDataProvider
   }
 
   public async stat(uri: Uri): Promise<FileStat> {
+    const key = uri.toString();
+    const forced = this.forcedMtime.get(key);
+    if (forced !== undefined) {
+      // Consume the forced mtime: return it once so VS Code detects a change
+      // and calls readFile() for fresh content, then revert to normal stat.
+      this.forcedMtime.delete(key);
+      return { ctime: 0, mtime: forced, size: 0, type: FileType.File };
+    }
     return await this.model
       .getResourceByUri(uri)
       .then((resource): FileStat => resource.fileStat);
@@ -486,6 +541,10 @@ class ContentDataProvider
       expand: true,
       select: false,
       focus: false,
+    }).then(undefined, () => {
+      // Swallow errors — a failed reveal should never block the user.
+      // This can happen when an item has no stable uid (e.g. server-side
+      // items that were just refreshed) and VS Code cannot resolve it.
     });
   }
 
@@ -774,9 +833,42 @@ class ContentDataProvider
       item.value.split("\n").map(async (uri: string) => {
         const itemUri = Uri.parse(uri.trim());
         const name = basename(itemUri.path);
-        const isDirectory = (
-          await promisify(lstat)(itemUri.fsPath)
-        ).isDirectory();
+
+        // Only accept saved local files (scheme === "file").
+        if (itemUri.scheme !== "file") {
+          if (itemUri.scheme === "untitled") {
+            window.showErrorMessage(
+              l10n.t(Messages.FileDropUnsavedError, { name }),
+            );
+          }
+          // Skip non-file URIs silently (e.g. sasServer: URIs from internal drags
+          // are already handled by the custom mimeType drop handler)
+          return;
+        }
+
+        // Guard against empty or root-level paths — these would cause the entire
+        // local filesystem to be uploaded if accidentally passed through.
+        const fsPath = itemUri.fsPath;
+        if (!fsPath || fsPath === "/" || fsPath === "\\") {
+          window.showErrorMessage(
+            l10n.t(Messages.FileDropUnsavedError, { name: fsPath || uri }),
+          );
+          return;
+        }
+
+        let fileStat: { isDirectory: () => boolean };
+        try {
+          fileStat = await promisify(lstat)(fsPath);
+        } catch {
+          // File doesn't exist on the local filesystem (e.g. unsaved document
+          // whose URI was inadvertently put in the drag payload as a file: URI).
+          window.showErrorMessage(
+            l10n.t(Messages.FileDropUnsavedError, { name }),
+          );
+          return;
+        }
+
+        const isDirectory = fileStat.isDirectory();
 
         if (isDirectory) {
           const success = await this.handleFolderDrop(target, itemUri.fsPath);

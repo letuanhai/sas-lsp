@@ -21,7 +21,7 @@ import {
   sortedContentItems,
 } from "../../components/ContentNavigator/utils";
 import { ProfileWithFileRootOptions } from "../../components/profile";
-import { getResourceId, getSasServerUri } from "../rest/util";
+import { getSasServerUri } from "../rest/util";
 import { ensureCredentials } from "./index";
 import { getAxios, getCredentials } from "./state";
 
@@ -271,6 +271,7 @@ class StudioWebServerAdapter implements ContentAdapter {
 
     const item: ContentItem = {
       id: uri,
+      uid: uri,
       uri,
       name,
       creationTimeStamp,
@@ -296,10 +297,17 @@ class StudioWebServerAdapter implements ContentAdapter {
       },
     };
 
+    // Use the full server path as the URI path (not just the filename) so that
+    // two files with the same name in different folders get distinct VS Code URIs
+    // and can be opened simultaneously without conflicting in the editor.
+    const vscUri = Uri.parse(
+      `sasServer:${uri.replace(/#/g, "%23").replace(/\?/g, "%3F")}`,
+    );
+
     return {
       ...item,
       contextValue: this.contextMenuProvider.availableActions(item),
-      vscUri: getSasServerUri(item, false),
+      vscUri,
     };
   }
 
@@ -330,13 +338,14 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   public async getContentOfUri(uri: Uri): Promise<string> {
-    const path = getResourceId(uri);
+    // vscUri for SAS Server files encodes the full server path as uri.path
+    const path = uri.path;
     const item = await this.getItemAtPath(path);
     return (await this.getContentOfItem(item)) || "";
   }
 
   public async getItemOfUri(uri: Uri): Promise<ContentItem> {
-    const path = getResourceId(uri);
+    const path = uri.path;
     return this.getItemAtPath(path);
   }
 
@@ -350,7 +359,7 @@ class StudioWebServerAdapter implements ContentAdapter {
       return;
     }
 
-    const path = getResourceId(uri);
+    const path = uri.path;
     // Use double-slash pattern matching getContentOfItem (~~ds~~ returns 404)
     await axios.post(
       `/sessions/${creds.sessionId}/workspace/${path}`,
@@ -403,6 +412,12 @@ class StudioWebServerAdapter implements ContentAdapter {
       const filePath = parentPath.endsWith("/")
         ? `${parentPath}${fileName}`
         : `${parentPath}/${fileName}`;
+
+      // Prevent silently overwriting an existing file
+      const existingChildren = await this.getChildItems(parentItem);
+      if (existingChildren.some((child) => child.name === fileName)) {
+        return undefined;
+      }
 
       const content = buffer ? Buffer.from(buffer).toString() : "";
       // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
@@ -495,6 +510,19 @@ class StudioWebServerAdapter implements ContentAdapter {
     }
 
     try {
+      // Check for duplicate name in parent folder before renaming
+      const parentUri =
+        item.parentFolderUri ??
+        item.uri.substring(0, item.uri.lastIndexOf("/"));
+      const fakeParentItem = this.convertEntryToContentItem(
+        { name: "", uri: parentUri, isDirectory: true },
+        parentUri,
+      );
+      const existingChildren = await this.getChildItems(fakeParentItem);
+      if (existingChildren.some((child) => child.name === newName)) {
+        return undefined;
+      }
+
       await axios.post(`/${creds.sessionId}/`, {
         operationName: "rename",
         newName,
@@ -504,9 +532,6 @@ class StudioWebServerAdapter implements ContentAdapter {
         isNativeMVS: false,
       });
 
-      const parentUri =
-        item.parentFolderUri ??
-        item.uri.substring(0, item.uri.lastIndexOf("/"));
       const newUri = parentUri.endsWith("/")
         ? `${parentUri}${newName}`
         : `${parentUri}/${newName}`;
@@ -569,6 +594,12 @@ class StudioWebServerAdapter implements ContentAdapter {
   ): Promise<ContentItem | undefined> {
     if (!item.parentFolderUri) {
       return undefined;
+    }
+    // Items whose parent is the filesystem root ("/") are direct children of
+    // the virtual "SAS Server" root node — return that node so VS Code can
+    // resolve the full parent chain when revealing items in the tree.
+    if (item.parentFolderUri === "/" || item.parentFolderUri === SERVER_FOLDER_ID) {
+      return this.rootFolders[SAS_SERVER_ROOT_FOLDERS[0]];
     }
     try {
       return await this.getItemAtPath(item.parentFolderUri);
