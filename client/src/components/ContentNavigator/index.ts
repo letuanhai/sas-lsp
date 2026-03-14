@@ -99,7 +99,7 @@ class ContentNavigator implements SubscriptionProvider {
       ...this.contentDataProvider.getSubscriptions(),
       commands.registerCommand(`${SAS}.openItem`, async (uri: Uri) => {
         this.contentDataProvider.invalidateFile(uri);
-        await commands.executeCommand("vscode.open", uri);
+        await commands.executeCommand("vscode.open", uri, { preview: false });
       }),
       commands.registerCommand(
         `${SAS}.deleteResource`,

@@ -38,12 +38,59 @@ Fix:
 
 - Add AbortController in state.ts; abort on `setCredentials`
 
-### 1e. Same-name files in different folders can't be opened simultaneously — not resolved
+### 1e. Same-name files in different folders can't be opened simultaneously ✓
 
-Root cause unknown. The `vscUri` was changed from `sasServer:/name?id=/path` to
-`sasServer:/full/path` so the URI path is now distinct per folder. VS Code breadcrumb
-shows the correct distinct URI, but VS Code still reuses the same editor tab for both.
-May be a VS Code document identity issue beyond the extension's control.
+**URIs ARE distinct** — confirmed by code review. StudioWeb adapter builds
+`sasServer:/folder1/test.sas` vs `sasServer:/folder2/test.sas` (line 303 of
+`StudioWebServerAdapter.ts`). These are fully distinct URIs (different `path` component,
+same scheme, no authority). VS Code identifies FileSystemProvider documents by full URI,
+so document identity is NOT the problem.
+
+**Root cause: VS Code preview tab behavior.** When a tree item is clicked, the `command`
+on the TreeItem fires `SAS.server.openItem` (ContentDataProvider.ts:281), which calls
+`commands.executeCommand("vscode.open", uri)` (index.ts:102) **without** passing
+`{ preview: false }`. This means VS Code opens the file in **preview mode** — and preview
+tabs replace each other on single-click. So clicking `test.sas` in folder1, then clicking
+`test.sas` in folder2, replaces the first preview tab with the second. This happens for
+ALL files (not just same-name ones), but is most confusing when names match because the
+tab label doesn't visually change.
+
+**Why it seems name-specific:** The tab label shows only the filename (not the full path).
+When two files have different names, the user sees the tab label change and perceives it
+as "opening a new file." When names match, the tab label stays the same, so it looks like
+"the same file is still open" even though the content changed to the second file.
+
+**Fix options (pick one):**
+
+1. **Pass `{ preview: false }` to `vscode.open`** in the `openItem` command
+   (index.ts:102). This makes every tree-item click open a persistent (non-preview) tab.
+   Simple, but changes behavior for all files — users accumulate many open tabs.
+
+2. **Double-click already handles this.** VS Code tree views promote preview→persistent
+   on double-click. Educating users to double-click to "pin" a tab may be sufficient.
+   No code change needed.
+
+3. **Show parent folder in tab label.** Use `resourceUri` (already set on TreeItem at
+   line 289) which includes the full path. VS Code automatically appends parent folder
+   disambiguation to tab labels when two tabs share the same filename. This ALREADY
+   works if both files are opened as persistent tabs (double-click or edit). The issue
+   is only that preview mode prevents both from being open simultaneously.
+
+**Recommended fix:** Option 1 — change the `openItem` command to use `{ preview: false }`:
+```ts
+// In index.ts, line 102:
+await commands.executeCommand("vscode.open", uri, { preview: false });
+```
+This is a one-line change. The `resourceUri` on the TreeItem already contains the full
+path, so VS Code will auto-disambiguate tab labels (e.g., "test.sas — folder1" vs
+"test.sas — folder2") when both are open.
+
+**Secondary issue:** `getEditorTabsForItem` in utils.ts:125 matches tabs by
+`tab.input.uri.query.includes(fileUri.query)`. StudioWeb URIs have NO query string,
+so `"".includes("")` is always true — this function matches ALL open StudioWeb file tabs
+for any item. This could cause bugs when closing tabs on delete. Fix: compare full URI
+(`tab.input.uri.toString() === fileUri.toString()`) or compare path
+(`tab.input.uri.path === fileUri.path`).
 
 ### 1f. Rename allows duplicate name in same folder ✓
 
