@@ -16,6 +16,7 @@ import {
 } from "vscode";
 
 import { profileConfig } from "../../commands/profile";
+import { openSas7bdatAsDataViewer } from "../../connection/studioweb/openDataset";
 import { SubscriptionProvider } from "../SubscriptionProvider";
 import { ConnectionType, ProfileWithFileRootOptions } from "../profile";
 import { treeViewSelections } from "../utils/treeViewSelections";
@@ -98,6 +99,15 @@ class ContentNavigator implements SubscriptionProvider {
     return [
       ...this.contentDataProvider.getSubscriptions(),
       commands.registerCommand(`${SAS}.openItem`, async (uri: Uri) => {
+        if (uri.path.toLowerCase().endsWith(".sas7bdat")) {
+          const activeProfile = profileConfig.getProfileByName(
+            profileConfig.getActiveProfile(),
+          );
+          if (activeProfile?.connectionType === ConnectionType.StudioWeb) {
+            await openSas7bdatAsDataViewer(uri);
+            return;
+          }
+        }
         this.contentDataProvider.invalidateFile(uri);
         await commands.executeCommand("vscode.open", uri, { preview: false });
       }),

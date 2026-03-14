@@ -313,6 +313,47 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
     }
   }
 
+  public async assignTempLibrary(
+    libref: string,
+    dirPath: string,
+  ): Promise<void> {
+    const axios = getAxios();
+    const creds = getCredentials();
+    if (!axios || !creds) {
+      return;
+    }
+
+    await axios.put(
+      `/libdata/${creds.sessionId}/${libref}`,
+      {
+        data: null,
+        isLibrary: true,
+        isReadOnly: false,
+        isHadoop: false,
+        isDBMS: false,
+        library: null,
+        path: dirPath,
+        options: "",
+        type: null,
+        dataType: null,
+        format: "",
+        uri: null,
+        desc: "",
+        informat: "",
+        length: 0,
+        tableName: "",
+        engine: "",
+        serverName: "",
+        children: [],
+        table: false,
+        numRows: 0,
+        id: libref,
+        name: libref,
+      },
+      { headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   public async deleteTable(item: LibraryItem): Promise<void> {
     const axios = getAxios();
     const creds = getCredentials();
