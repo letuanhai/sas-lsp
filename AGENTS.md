@@ -11,18 +11,77 @@ npm run watch        # esbuild watch mode with sourcemaps for dev
 npm run lint         # ESLint on all TS/TSX files
 npm run format       # Prettier write
 npm run format:check # Prettier check (CI)
-npm run test         # compile + typecheck + run all tests
-npm run test-client  # Node.js test runner for client only
+npm run test         # compile + typecheck + run all tests (server + harness + integration)
+npm run test-client  # @vscode/test-cli integration tests (downloads VS Code, runs in extension host)
+npm run test-harness # Mocha direct-import tests (no VS Code, fast)
 npm run test-server  # Mocha + ts-node for server only
 ```
 
 Type-check only (faster than full test):
+
 ```bash
 npx tsc -p client/tsconfig.json --noEmit
 npx tsc -p server/tsconfig.json --noEmit
 ```
 
 For debugging: open in VS Code and press **F5** ("Launch Client" configuration).
+
+## Testing (for AI agents)
+
+There are two testing approaches. **Choose based on what you need:**
+
+### 1. Direct Test Harness (`npm run test-harness`) — PREFER THIS
+
+**When to use:** Testing code logic, API calls, utilities, stores, data transformations — anything that does NOT require the `vscode` API namespace.
+
+- Files go in `client/test/harness/`
+- Runs via Mocha + ts-node directly (no VS Code download, no GUI)
+- Uses the same chai/sinon stack as existing tests
+- **Fast** — completes in seconds, ideal for agent iteration loops
+- Can mock axios to test HTTP API interactions (e.g., StudioWeb adapters)
+
+```bash
+# Run all harness tests
+npm run test-harness
+
+# Run a single file
+npx cross-env TS_NODE_PROJECT=./client/tsconfig.json mocha -r ts-node/register client/test/harness/mytest.test.ts
+```
+
+**What to test here:** `state.ts`, `SASCodeDocument`, stores (`useRunStore`, `useLogStore`), `stripHtml`, profile validation, data transformations, adapter logic (with mocked axios).
+
+### 2. VS Code Integration Tests (`npm run test-client`) — WHEN YOU NEED VSCODE API
+
+**When to use:** Testing functionality that requires the VS Code extension host — commands, UI interactions, language server integration, webview panels, tree views.
+
+- Configured in `.vscode-test.mjs` using `@vscode/test-cli`
+- Tests go in `client/test/` (compiled to `client/out/test/`)
+- Requires `npm run pretest` first (compile + typecheck)
+- Downloads VS Code automatically, launches extension host, runs Mocha inside it
+- Tests have full access to the `vscode` API
+
+```bash
+# Run all integration tests (requires pretest first)
+npm run pretest && npm run test-client
+
+# Run only a specific label
+npm run test-client:label integration
+```
+
+**What to test here:** Extension activation, command registration, LSP features (completion, hover, diagnostics), notebook serialization, content/library tree views.
+
+### Decision guide for agents
+
+| Need to test…                        | Use                  |
+| ------------------------------------ | -------------------- |
+| Pure function / utility              | `test-harness`       |
+| Store actions (zustand)              | `test-harness`       |
+| HTTP API logic (with mocked axios)   | `test-harness`       |
+| Data transformation / parsing        | `test-harness`       |
+| VS Code command execution            | `test-client`        |
+| LSP features (completion, hover)     | `test-client`        |
+| Extension activation / registration  | `test-client`        |
+| Anything importing from `"vscode"`   | `test-client`        |
 
 ## Architecture
 
@@ -81,26 +140,51 @@ The `SAS.studioweb.newSession` command (registered in `node/extension.ts`) close
 
 `updateViewSettings()` in `node/extension.ts` controls sidebar panel visibility via `setContext`:
 
-| Context key | Enabled for |
-|---|---|
-| `SAS.canSignIn` | All types except SSH and StudioWeb |
-| `SAS.librariesEnabled` | All types except SSH |
-| `SAS.serverEnabled` | All types except SSH |
-| `SAS.contentEnabled` | REST (Viya) and StudioWeb |
+| Context key            | Enabled for                        |
+| ---------------------- | ---------------------------------- |
+| `SAS.canSignIn`        | All types except SSH and StudioWeb |
+| `SAS.librariesEnabled` | All types except SSH               |
+| `SAS.serverEnabled`    | All types except SSH               |
+| `SAS.contentEnabled`   | REST (Viya) and StudioWeb          |
 
 ## SAS Studio Web API Reference
 
 The following documentation files describe the internal SAS Studio Web REST API used by the `studioweb` connection type:
 
-| File | Description |
-|------|-------------|
-| `SASStudio-API-Documentation.md` | Complete API reference: code execution, file operations, library navigation, SQL queries, and VS Code extension integration guide |
+| File                              | Description                                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `SASStudio-API-Documentation.md`  | Complete API reference: code execution, file operations, library navigation, SQL queries, and VS Code extension integration guide |
 | `SASStudio-FileOperations-API.md` | Detailed file/folder operations: path encoding (`~ps~`, `~dot~`), tree loading, CRUD operations, BIP tree, FTP, and CSRF handling |
-| `SASStudio-API.ipynb` | Interactive Jupyter notebook with working Python examples for all API endpoints |
+| `SASStudio-API.ipynb`             | Interactive Jupyter notebook with working Python examples for all API endpoints                                                   |
 
 **Key API patterns:**
+
 - Base URL: `{host}/sasexec` or `{host}/SASStudio/{version}/sasexec`
 - Auth: `RemoteSession-Id` header + session cookie
 - File paths: Use `~~ds~~` prefix (e.g., `/workspace/~~ds~~/path/to/file`)
 - Libraries: `/libdata/{sessionId}/libraries` endpoint
 - Code execution: `POST /sessions/{id}/asyncSubmissions` → poll `/messages/longpoll`
+
+### API Exploration via Playwright
+
+Agents can use the `playwright-cli` skill to explore SAS Studio Web API behavior interactively:
+
+```bash
+# Load the skill first
+/skill playwright-cli
+
+# Then navigate to the SAS Studio instance
+/playwright-cli open http://192.168.0.141/SASStudio/38
+```
+
+This opens a browser to the local SAS Studio instance where you can observe actual API calls, inspect network traffic, and verify endpoint behavior while working on `studioweb` connection features.
+
+## SAS Server SSH Access
+
+The SAS server is also accessible via SSH:
+
+- **Host:** `192.168.0.141`
+- **Username:** `sasdemo`
+- **Command:** `ssh sasdemo@192.168.0.141`
+
+SSH access is useful for inspecting server-side logs, running SAS commands directly, or debugging connection issues outside of the extension.
