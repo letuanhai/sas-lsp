@@ -36,33 +36,20 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
   }
 
   public async getLibraries(): Promise<{ items: LibraryItem[]; count: number }> {
-    console.log("[StudioWeb] getLibraries called");
     if (!(await ensureCredentials())) {
-      console.warn("[StudioWeb] getLibraries: ensureCredentials returned false");
       return { items: [], count: 0 };
     }
     const axios = getAxios();
     const creds = getCredentials();
     if (!axios || !creds) {
-      console.warn("[StudioWeb] getLibraries: no axios or creds");
       return { items: [], count: 0 };
     }
-    console.log("[StudioWeb] getLibraries: sessionId =", creds.sessionId, "baseURL =", axios.defaults.baseURL);
 
     try {
       const url = `/libdata/${creds.sessionId}/libraries`;
-      console.log("[StudioWeb] getLibraries GET", url);
       const response = await axios.get(url, {
         headers: { "Content-Type": "application/json" },
       });
-      console.log(
-        "[StudioWeb] getLibraries status:",
-        response.status,
-        "data type:",
-        typeof response.data,
-        "data:",
-        JSON.stringify(response.data),
-      );
       const parsed: LibdataNode =
         typeof response.data === "string"
           ? JSON.parse(response.data)
@@ -70,7 +57,6 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
       const rawItems: LibdataNode[] = Array.isArray(parsed)
         ? parsed
         : (parsed?.children ?? []);
-      console.log("[StudioWeb] getLibraries rawItems count:", rawItems.length);
 
       const libraries: LibraryItem[] = rawItems.map((entry) => {
         const libref = entry.name;
@@ -86,12 +72,6 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
         };
       });
 
-      console.log(
-        "[StudioWeb] getLibraries returning",
-        libraries.length,
-        "libraries:",
-        libraries.map((l) => l.name),
-      );
       return { items: libraries, count: -1 };
     } catch (error) {
       console.error("[StudioWeb] getLibraries error:", error);
@@ -110,18 +90,9 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
 
     try {
       const url = `/libdata/${creds.sessionId}/libraries~${item.name}`;
-      console.log("[StudioWeb] getTables GET", url);
       const response = await axios.get(url, {
         headers: { "Content-Type": "application/json" },
       });
-      console.log(
-        "[StudioWeb] getTables status:",
-        response.status,
-        "data type:",
-        typeof response.data,
-        "data:",
-        JSON.stringify(response.data),
-      );
       const parsed: LibdataNode =
         typeof response.data === "string"
           ? JSON.parse(response.data)

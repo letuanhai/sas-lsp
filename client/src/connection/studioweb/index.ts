@@ -153,20 +153,15 @@ export class StudioWebSession extends Session {
             }
           }
         } else if (messageType === "SubmitComplete") {
-          console.log("[StudioWeb] SubmitComplete payload:", JSON.stringify(payload, null, 2));
-
           const resultsLink = payload?.links?.find(
             (link: { rel: string; uri: string }) => link.rel === "results",
           );
-          console.log("[StudioWeb] resultsLink:", resultsLink);
 
           if (resultsLink?.uri) {
             try {
               const resultsUrl = `${credentials.endpoint}${resultsLink.uri}`;
 
-              console.log("[StudioWeb] fetching results from:", resultsUrl);
               const { data: htmlContent } = await axiosInstance.get(resultsUrl);
-              console.log("[StudioWeb] htmlContent type:", typeof htmlContent, "length:", typeof htmlContent === "string" ? htmlContent.length : "n/a");
 
               if (typeof htmlContent === "string" && htmlContent.trim()) {
                 runResult = { html5: htmlContent, title: "Result" };
