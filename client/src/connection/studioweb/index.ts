@@ -20,12 +20,12 @@ let sessionInstance: StudioWebSession;
 function stripHtml(html: string): string {
   return html
     .replace(/&nbsp;/gi, " ")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&amp;/gi, "&")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(?:p|div|li|tr|td|th|h[1-6]|pre|blockquote)>/gi, "\n")
-    .replace(/<[^>]*>/g, "");
+    .replace(/<[^>]*>/g, "")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&");
 }
 
 /**
