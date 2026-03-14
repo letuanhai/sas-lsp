@@ -122,7 +122,7 @@ export const getEditorTabsForItem = (item: ContentItem) => {
     (tab) =>
       (tab.input instanceof TabInputText ||
         tab.input instanceof TabInputNotebook) &&
-      tab.input.uri.query.includes(fileUri.query), // compare the file id
+      tab.input.uri.toString() === fileUri.toString(),
   );
 };
 
