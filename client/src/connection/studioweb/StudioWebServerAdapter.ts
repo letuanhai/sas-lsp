@@ -335,19 +335,16 @@ class StudioWebServerAdapter implements ContentAdapter {
       return;
     }
 
-    try {
-      const path = getResourceId(uri);
-      await axios.post(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${path}`,
-        content,
-        {
-          params: { ct: "text/plain;charset=UTF-8" },
-          headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        },
-      );
-    } catch (error) {
-      console.error("StudioWebServerAdapter.updateContentOfItem error:", error);
-    }
+    const path = getResourceId(uri);
+    // Use double-slash pattern matching getContentOfItem (~~ds~~ returns 404)
+    await axios.post(
+      `/sessions/${creds.sessionId}/workspace/${path}`,
+      content,
+      {
+        params: { ct: "text/plain;charset=UTF-8" },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      },
+    );
   }
 
   public async deleteItem(item: ContentItem): Promise<boolean> {
@@ -358,8 +355,9 @@ class StudioWebServerAdapter implements ContentAdapter {
     }
 
     try {
+      // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
       await axios.delete(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${item.uri}`,
+        `/sessions/${creds.sessionId}/workspace/${item.uri}`,
       );
       return true;
     } catch (error) {
@@ -386,8 +384,9 @@ class StudioWebServerAdapter implements ContentAdapter {
         : `${parentPath}/${fileName}`;
 
       const content = buffer ? Buffer.from(buffer).toString() : "";
+      // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
       await axios.post(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${filePath}`,
+        `/sessions/${creds.sessionId}/workspace/${filePath}`,
         content,
         {
           params: { ct: "text/plain;charset=UTF-8" },
@@ -422,8 +421,9 @@ class StudioWebServerAdapter implements ContentAdapter {
         : `${parentPath}/${folderName}`;
 
       // Create directory by POSTing with a trailing slash
+      // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
       await axios.post(
-        `/sessions/${creds.sessionId}/workspace/~~ds~~${folderPath}/`,
+        `/sessions/${creds.sessionId}/workspace/${folderPath}/`,
         "",
         {
           params: { ct: "text/plain;charset=UTF-8" },

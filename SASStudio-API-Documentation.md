@@ -941,11 +941,14 @@ const axiosInstance = axios.create({
 
 ### File Path Encoding
 
-The workspace API uses `~~ds~~` as a path prefix:
+The `/sessions/{id}/workspace/` endpoint uses a double-slash before the path (since `filePath` starts with `/`):
 
 ```typescript
-const fileUrl = `/sessions/${sessionId}/workspace/~~ds~~${filePath}`;
+const fileUrl = `/sessions/${sessionId}/workspace/${filePath}`;
+// e.g. /sessions/{id}/workspace//folders/myfolders/file.sas
 ```
+
+> **Note:** The `~~ds~~` prefix does NOT work with the `/sessions/{id}/workspace/` endpoint (returns 404). It is only used with the non-session directory listing endpoint `/{sessionId}/~ps~encoded~ps~path`.
 
 ### Polling Pattern
 
