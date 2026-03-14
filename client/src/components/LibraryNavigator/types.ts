@@ -6,7 +6,8 @@ import { ColumnCollection, TableInfo } from "../../connection/rest/api/compute";
 
 export const LibraryType = "library";
 export const TableType = "table";
-export type LibraryItemType = "library" | "table";
+export const ViewType = "view";
+export type LibraryItemType = "library" | "table" | "view";
 export interface LibraryItem {
   uid: string;
   id: string;
