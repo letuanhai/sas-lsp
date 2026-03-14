@@ -302,10 +302,9 @@ class StudioWebServerAdapter implements ContentAdapter {
     }
 
     try {
-      // Per SASStudio-FileOperations-API.md line 225-235:
-      // GET /sasexec/sessions/{sessionId}/workspace/{filePath}
+      // SAS Studio 3.8 uses double-slash: GET /sasexec/sessions/{id}/workspace//{path}
       const response = await axios.get(
-        `/sessions/${creds.sessionId}/workspace${item.uri}`,
+        `/sessions/${creds.sessionId}/workspace/${item.uri}`,
         {
           responseType: "text",
           transformResponse: [(data) => data],
