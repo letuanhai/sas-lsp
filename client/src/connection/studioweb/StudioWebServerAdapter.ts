@@ -26,25 +26,28 @@ import { ensureCredentials } from "./index";
 import { getAxios, getCredentials } from "./state";
 
 /**
- * Encode a filesystem path using SAS Studio's tilde notation.
- * `/` → `~ps~`, `.` → `~dot~`, with a trailing `~` terminator.
- * Example: `/folders/myfolders/test.sas` → `~ps~folders~ps~myfolders~ps~test~dot~sas~`
+ * Encode a filesystem path using SAS Studio's tilde notation for directory listing.
+ * `/` → `~ps~`, `.` → `~dot~` (no trailing tilde for directories).
+ * Example: `/folders/myfolders` → `~ps~folders~ps~myfolders`
  */
-function encodeOldStylePath(filePath: string): string {
-  return filePath.replace(/\./g, "~dot~").replace(/\//g, "~ps~") + "~";
+function encodeDirectoryPath(dirPath: string): string {
+  return dirPath.replace(/\./g, "~dot~").replace(/\//g, "~ps~");
 }
 
 interface WorkspaceEntry {
   name: string;
   uri?: string;
   path?: string;
-  type?: string;   // "file" | "directory" | "dir"
+  type?: string; // "file" | "directory" | "dir"
   isDirectory?: boolean;
   category?: number; // 0 = directory, 1+ = file
   modifiedTimeStamp?: string | number;
+  modifiedDate?: number; // Unix timestamp in milliseconds (from SAS Studio 3.8 API)
   creationTimeStamp?: string | number;
-  size?: number;
+  size?: number | string; // Can be number or "166 bytes" string
   parentFolderUri?: string;
+  uriParent?: string;
+  haveChildren?: boolean;
 }
 
 class StudioWebServerAdapter implements ContentAdapter {
@@ -139,47 +142,42 @@ class StudioWebServerAdapter implements ContentAdapter {
         );
         const data = response.data;
 
-        // The _root_ response may be a single entry or an array; normalise to array
-        const entries: WorkspaceEntry[] = Array.isArray(data)
-          ? data
-          : data
-          ? [data]
+        // Per SASStudio-FileOperations-API.md, _root_ returns:
+        // { id: "_root_", name: "...", isDirectory: true, uri: "/", children: [...] }
+        // The children array contains top-level items like "My Folders", "Folder Shortcuts"
+        const children: WorkspaceEntry[] = Array.isArray(data?.children)
+          ? data.children
           : [];
 
-        if (entries.length === 0) {
-          return [];
+        if (children.length === 0) {
+          // Fallback: create a home folder pointing to root
+          const [homeName, homeType] = homeDirectoryNameAndType(
+            this.fileNavigationRoot,
+            this.fileNavigationCustomRootPath,
+          );
+
+          const homeFolder = convertStaticFolderToContentItem(
+            createStaticFolder("/", homeName, homeType, "/", "getDirectoryMembers"),
+            { write: false, delete: false, addMember: true },
+          );
+          homeFolder.contextValue =
+            this.contextMenuProvider.availableActions(homeFolder);
+          return [homeFolder];
         }
 
-        // Use first entry to determine the home directory uri
-        const firstEntry = entries[0];
-        const homeUri =
-          firstEntry.parentFolderUri ??
-          firstEntry.uri ??
-          firstEntry.path ??
-          "/";
+        // Convert each root child (e.g., "My Folders", "Folder Shortcuts") to a ContentItem
+        const childItems = children
+          .filter((e) => e.name)
+          .map((entry) => {
+            const isDir = entry.isDirectory === true;
+            const uri = entry.uri ?? `/${entry.name}`;
+            return this.convertEntryToContentItem(
+              { ...entry, uri, isDirectory: isDir },
+              "/",
+            );
+          });
 
-        const [homeName, homeType] = homeDirectoryNameAndType(
-          this.fileNavigationRoot,
-          this.fileNavigationCustomRootPath,
-        );
-
-        const homeFolder = convertStaticFolderToContentItem(
-          createStaticFolder(
-            homeUri,
-            homeName,
-            homeType,
-            homeUri,
-            "getDirectoryMembers",
-          ),
-          {
-            write: false,
-            delete: false,
-            addMember: true,
-          },
-        );
-        homeFolder.contextValue =
-          this.contextMenuProvider.availableActions(homeFolder);
-        return [homeFolder];
+        return sortedContentItems(childItems);
       } catch (error) {
         console.error("StudioWebServerAdapter.getChildItems(_root_) error:", error);
         return [];
@@ -193,7 +191,7 @@ class StudioWebServerAdapter implements ContentAdapter {
         (l) => l.rel === "getDirectoryMembers",
       );
       const dirPath = dirLink?.uri ?? parentItem.uri;
-      const dirUrl = `/${creds.sessionId}/${encodeOldStylePath(dirPath)}`;
+      const dirUrl = `/${creds.sessionId}/${encodeDirectoryPath(dirPath)}`;
       console.log(
         "[StudioWeb] getChildItems GET",
         dirUrl,
@@ -211,16 +209,23 @@ class StudioWebServerAdapter implements ContentAdapter {
       );
 
       const data = response.data;
-      const entries: WorkspaceEntry[] = Array.isArray(data)
-        ? data
-        : data?.items
-        ? data.items
-        : [];
+      // Per SASStudio-FileOperations-API.md, folder response includes a `children` array
+      const entries: WorkspaceEntry[] = Array.isArray(data?.children)
+        ? data.children
+        : Array.isArray(data)
+          ? data
+          : data?.items
+            ? data.items
+            : [];
       console.log("[StudioWeb] getChildItems entries count:", entries.length);
 
       const childItems = entries
         .filter((e) => e.name) // skip unnamed entries
-        .map((entry) => this.convertEntryToContentItem(entry, dirPath));
+        .map((entry) => {
+          // The entry.uri from API is the full path; use it directly
+          const uri = entry.uri ?? `${dirPath}/${entry.name}`;
+          return this.convertEntryToContentItem({ ...entry, uri }, dirPath);
+        });
 
       return sortedContentItems(childItems);
     } catch (error) {
@@ -254,11 +259,14 @@ class StudioWebServerAdapter implements ContentAdapter {
         ? `${parentPath}${name}`
         : `${parentPath}/${name}`);
 
-    const modifiedTimeStamp = entry.modifiedTimeStamp
-      ? typeof entry.modifiedTimeStamp === "number"
-        ? entry.modifiedTimeStamp
-        : new Date(String(entry.modifiedTimeStamp).replace(/[^0-9]/g, "")).getTime() || 0
-      : 0;
+    // SAS Studio 3.8 uses modifiedDate (timestamp in ms), fallback to modifiedTimeStamp
+    const modifiedTimeStamp =
+      entry.modifiedDate ??
+      (entry.modifiedTimeStamp
+        ? typeof entry.modifiedTimeStamp === "number"
+          ? entry.modifiedTimeStamp
+          : new Date(String(entry.modifiedTimeStamp).replace(/[^0-9]/g, "")).getTime() || 0
+        : 0);
 
     const creationTimeStamp = entry.creationTimeStamp
       ? typeof entry.creationTimeStamp === "number"
@@ -284,7 +292,7 @@ class StudioWebServerAdapter implements ContentAdapter {
       creationTimeStamp,
       modifiedTimeStamp,
       links,
-      parentFolderUri: entry.parentFolderUri ?? parentPath,
+      parentFolderUri: entry.parentFolderUri ?? entry.uriParent ?? parentPath,
       permission: {
         write: true,
         delete: true,
@@ -294,7 +302,12 @@ class StudioWebServerAdapter implements ContentAdapter {
       fileStat: {
         ctime: 0,
         mtime: modifiedTimeStamp,
-        size: entry.size ?? 0,
+        size:
+          typeof entry.size === "number"
+            ? entry.size
+            : typeof entry.size === "string"
+              ? parseInt(entry.size, 10) || 0
+              : 0,
         type: fileType,
       },
     };
@@ -314,10 +327,11 @@ class StudioWebServerAdapter implements ContentAdapter {
     }
 
     try {
+      // Per SASStudio-FileOperations-API.md line 225-235:
+      // GET /sasexec/sessions/{sessionId}/workspace/{filePath}
       const response = await axios.get(
-        `/${creds.sessionId}/${encodeOldStylePath(item.uri)}`,
+        `/sessions/${creds.sessionId}/workspace${item.uri}`,
         {
-          params: { ct: "text/plain;charset=UTF-8" },
           responseType: "text",
           transformResponse: [(data) => data],
         },
