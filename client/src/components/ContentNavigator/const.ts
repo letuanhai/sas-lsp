@@ -78,7 +78,21 @@ export const Messages = {
   FileDownloadError: l10n.t("Unable to download files."),
   FileDragFromFavorites: l10n.t("Unable to drag files from my favorites."),
   FileDragFromTrashError: l10n.t("Unable to drag files from trash."),
+  FileAlreadyExistsError: l10n.t('A file named "{name}" already exists in this folder.'),
   FileDropError: l10n.t('Unable to drop item "{name}".'),
+  FileDropUnsavedError: l10n.t(
+    'Cannot drop unsaved file "{name}". Please save it first.',
+  ),
+  DropConfirmationMessage: l10n.t(
+    'Are you sure you want to move "{source}" to "{target}"?',
+  ),
+  DropConfirmationMessageMultiple: l10n.t(
+    'Are you sure you want to move {count} items to "{target}"?',
+  ),
+  DropUploadConfirmationMessage: l10n.t(
+    'Are you sure you want to upload files to "{target}"?',
+  ),
+  DropConfirmationLabel: l10n.t("Yes"),
   FileNavigationRootAdminError: l10n.t(
     "The files cannot be accessed from the path specified in the context definition for the SAS Compute Server. Contact your SAS administrator.",
   ),

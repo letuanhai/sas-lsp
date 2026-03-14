@@ -10,6 +10,7 @@ export interface StudioWebCredentials {
 
 let _credentials: StudioWebCredentials | undefined;
 let _axios: AxiosInstance | undefined;
+let _controller: AbortController | undefined;
 
 export function getCredentials(): StudioWebCredentials | undefined {
   return _credentials;
@@ -20,14 +21,26 @@ export function getAxios(): AxiosInstance | undefined {
 }
 
 export function setCredentials(creds: StudioWebCredentials | undefined): void {
+  // Cancel any in-flight requests from the previous session
+  _controller?.abort();
+  _controller = undefined;
+
   _credentials = creds;
   if (creds) {
+    _controller = new AbortController();
+    const controller = _controller;
     _axios = axios.create({
       baseURL: `${creds.endpoint}/sasexec`,
       headers: {
         Cookie: creds.cookieString,
         "RemoteSession-Id": creds.sessionId,
       },
+      timeout: 30000,
+    });
+    // Attach abort signal so all requests on this instance can be cancelled together
+    _axios.interceptors.request.use((config) => {
+      config.signal = controller.signal;
+      return config;
     });
   } else {
     _axios = undefined;
