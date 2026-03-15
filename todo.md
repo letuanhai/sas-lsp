@@ -1,5 +1,5 @@
 - [x] show output dataset from submission
-- [ ] show error messages noti when http error code
+- [x] show error messages noti when http error code
 
 ## Task 6: Quick File Browser (QuickPick-based server file navigation)
 
