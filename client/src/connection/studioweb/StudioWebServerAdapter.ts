@@ -1,6 +1,6 @@
 // Copyright © 2024, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import { FileType, Uri } from "vscode";
+import { FileType, Uri, l10n, window } from "vscode";
 
 import {
   SAS_SERVER_ROOT_FOLDER,
@@ -24,6 +24,30 @@ import { ProfileWithFileRootOptions } from "../../components/profile";
 import { getSasServerUri } from "../rest/util";
 import { ensureCredentials } from "./index";
 import { getAxios, getCredentials, getServerEncoding } from "./state";
+
+/**
+ * Extracts a human-readable message from an HTTP (Axios) error, including
+ * the status code when available.
+ */
+function httpErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "response" in error) {
+    const resp = (error as { response?: { status?: number; data?: unknown } })
+      .response;
+    if (resp) {
+      const { status, data } = resp;
+      const detail =
+        typeof data === "string"
+          ? data.slice(0, 200)
+          : typeof data === "object" && data !== null && "message" in data
+            ? String((data as { message: unknown }).message)
+            : "";
+      return status
+        ? `HTTP ${status}${detail ? ": " + detail : ""}`
+        : (error as unknown as Error).message ?? String(error);
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * Encode a filesystem path using SAS Studio's tilde notation for directory listing.
@@ -178,6 +202,9 @@ class StudioWebServerAdapter implements ContentAdapter {
         return sortedContentItems(childItems);
       } catch (error) {
         console.error("StudioWebServerAdapter.getChildItems(_root_) error:", error);
+        window.showErrorMessage(
+          l10n.t("Failed to load server files: {0}", httpErrorMessage(error)),
+        );
         return [];
       }
     }
@@ -217,6 +244,9 @@ class StudioWebServerAdapter implements ContentAdapter {
         "[StudioWeb] getChildItems error for",
         parentItem.uri,
         error,
+      );
+      window.showErrorMessage(
+        l10n.t("Failed to load folder '{0}': {1}", parentItem.uri, httpErrorMessage(error)),
       );
       return [];
     }
@@ -333,6 +363,9 @@ class StudioWebServerAdapter implements ContentAdapter {
       );
     } catch (error) {
       console.error("StudioWebServerAdapter.getContentOfItem error:", error);
+      window.showErrorMessage(
+        l10n.t("Failed to read file '{0}': {1}", item.uri, httpErrorMessage(error)),
+      );
       return "";
     }
   }
@@ -366,14 +399,22 @@ class StudioWebServerAdapter implements ContentAdapter {
     const encodingParam =
       encoding.toUpperCase() === "UTF-8" ? {} : { encoding };
     // Use double-slash pattern matching getContentOfItem (~~ds~~ returns 404)
-    await axios.post(
-      `/sessions/${creds.sessionId}/workspace/${path}`,
-      content,
-      {
-        params: encodingParam,
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-      },
-    );
+    try {
+      await axios.post(
+        `/sessions/${creds.sessionId}/workspace/${path}`,
+        content,
+        {
+          params: encodingParam,
+          headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        },
+      );
+    } catch (error) {
+      console.error("StudioWebServerAdapter.updateContentOfItem error:", error);
+      window.showErrorMessage(
+        l10n.t("Failed to save file '{0}': {1}", path, httpErrorMessage(error)),
+      );
+      throw error;
+    }
   }
 
   public async deleteItem(item: ContentItem): Promise<boolean> {
