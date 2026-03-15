@@ -100,23 +100,7 @@ export class StudioWebSession extends Session {
       cookieString,
     });
 
-    // Fetch the session's default text encoding from preferences.
-    // Endpoint: /{sessionId}/preferences/get?key=SWE.optionPreferencesGeneral.key
-    try {
-      const axiosInstance = getAxios();
-      if (axiosInstance) {
-        const prefsResp = await axiosInstance.get(
-          `/${sessionId}/preferences/get`,
-          { params: { key: "SWE.optionPreferencesGeneral.key" } },
-        );
-        const enc: string = prefsResp.data?.defaultTextEncoding;
-        if (enc) {
-          setServerEncoding(enc);
-        }
-      }
-    } catch {
-      // Preferences fetch failure is non-fatal; keep default UTF-8
-    }
+    await fetchServerEncoding(sessionId);
 
     updateStatusBarItem(true);
   }
@@ -248,6 +232,28 @@ export class StudioWebSession extends Session {
 }
 
 /**
+ * Fetches the server's default text encoding preference and stores it in state.
+ * Non-fatal: keeps default UTF-8 if the request fails.
+ */
+async function fetchServerEncoding(sessionId: string): Promise<void> {
+  try {
+    const axiosInstance = getAxios();
+    if (axiosInstance) {
+      const prefsResp = await axiosInstance.get(
+        `/${sessionId}/preferences/get`,
+        { params: { key: "SWE.optionPreferencesGeneral.key" } },
+      );
+      const enc: string = prefsResp.data?.defaultTextEncoding;
+      if (enc) {
+        setServerEncoding(enc);
+      }
+    }
+  } catch {
+    // Non-fatal: keep default UTF-8
+  }
+}
+
+/**
  * Ensures credentials are set, prompting the user if they are not.
  * Returns true if credentials are available after the call, false if the user cancelled.
  */
@@ -289,6 +295,7 @@ export async function ensureCredentials(): Promise<boolean> {
   }
 
   setCredentials({ endpoint, sessionId, cookieString });
+  await fetchServerEncoding(sessionId);
   return true;
 }
 
