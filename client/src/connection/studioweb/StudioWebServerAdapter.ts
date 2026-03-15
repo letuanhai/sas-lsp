@@ -23,7 +23,7 @@ import {
 import { ProfileWithFileRootOptions } from "../../components/profile";
 import { getSasServerUri } from "../rest/util";
 import { ensureCredentials } from "./index";
-import { getAxios, getCredentials } from "./state";
+import { getAxios, getCredentials, getServerEncoding } from "./state";
 
 /**
  * Encode a filesystem path using SAS Studio's tilde notation for directory listing.
@@ -323,14 +323,14 @@ class StudioWebServerAdapter implements ContentAdapter {
 
     try {
       // SAS Studio 3.8 uses double-slash: GET /sasexec/sessions/{id}/workspace//{path}
+      // Use arraybuffer so we get the raw bytes and can decode with the server's encoding.
       const response = await axios.get(
         `/sessions/${creds.sessionId}/workspace/${item.uri}`,
-        {
-          responseType: "text",
-          transformResponse: [(data) => data],
-        },
+        { responseType: "arraybuffer" },
       );
-      return String(response.data ?? "");
+      return new TextDecoder(getServerEncoding()).decode(
+        response.data as ArrayBuffer,
+      );
     } catch (error) {
       console.error("StudioWebServerAdapter.getContentOfItem error:", error);
       return "";
@@ -360,12 +360,17 @@ class StudioWebServerAdapter implements ContentAdapter {
     }
 
     const path = uri.path;
+    const encoding = getServerEncoding();
+    // The server expects UTF-8 body. When server encoding is not UTF-8,
+    // the ?encoding param tells it to transcode UTF-8 → the target encoding.
+    const encodingParam =
+      encoding.toUpperCase() === "UTF-8" ? {} : { encoding };
     // Use double-slash pattern matching getContentOfItem (~~ds~~ returns 404)
     await axios.post(
       `/sessions/${creds.sessionId}/workspace/${path}`,
       content,
       {
-        params: { ct: "text/plain;charset=UTF-8" },
+        params: encodingParam,
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
       },
     );
@@ -419,13 +424,19 @@ class StudioWebServerAdapter implements ContentAdapter {
         return undefined;
       }
 
-      const content = buffer ? Buffer.from(buffer).toString() : "";
+      // buffer is UTF-8 bytes from VS Code; decode explicitly as UTF-8.
+      const content = buffer
+        ? new TextDecoder("utf-8").decode(buffer)
+        : "";
+      const encoding = getServerEncoding();
+      const encodingParam =
+        encoding.toUpperCase() === "UTF-8" ? {} : { encoding };
       // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
       await axios.post(
         `/sessions/${creds.sessionId}/workspace/${filePath}`,
         content,
         {
-          params: { ct: "text/plain;charset=UTF-8" },
+          params: encodingParam,
           headers: { "Content-Type": "text/plain;charset=UTF-8" },
         },
       );

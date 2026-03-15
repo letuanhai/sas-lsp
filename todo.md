@@ -148,4 +148,42 @@ When a `.sas7bdat` file is double-clicked in SAS Studio's file browser, it:
 - `ContentNavigator/index.ts` `SAS.server.openItem` — detects `.sas7bdat` extension + StudioWeb
   connection type, calls `openSas7bdatAsDataViewer` instead of `vscode.open`
 
-## Task 5: Support read/write with server encoding (not UTF-8) — not started
+## Task 5: Support read/write with server encoding (not UTF-8) ✓
+
+### Investigation findings (from SSH + API testing)
+
+**Reading files:**
+- `GET /sessions/{id}/workspace/{path}` always returns **raw file bytes** — no transcoding.
+- `?ct=text/plain;charset=<ENC>` only echoes the charset back in the response `Content-Type` header; it does NOT transcode the body.
+- Old code used `responseType: "text"` → Node.js axios decoded as UTF-8 → corrupted non-UTF-8 files.
+
+**Writing files:**
+- `POST /sessions/{id}/workspace/{path}` with `?encoding=<ENC>` tells the server to transcode **from UTF-8 input → target encoding** before saving.
+- Without `?encoding`, the server saves body bytes as-is (assumes UTF-8).
+- The `Content-Type` request charset header is **ignored** — only the `?encoding` URL param matters.
+- Old code sent `params: { ct: ... }` (the `ct` param does nothing on POST) and never passed `?encoding`.
+
+**Session preferences (default encoding):**
+- `GET /{sessionId}/preferences/get?key=SWE.optionPreferencesGeneral.key`
+- Returns `{ "defaultTextEncoding": "ISO-8859-1", ... }` (this test server has ISO-8859-1 set).
+
+**SQL / table data:**
+- `POST /sessions/{id}/sql` always returns UTF-8 JSON — no encoding issues. No changes needed.
+
+**File listing API:**
+- `GET /sessions/{id}/workspace/{path}?includeChildren=false` (with `ObjectType` header) returns JSON.
+- File objects do NOT include a per-file `encoding` field — only session-level default encoding is available.
+
+### Fix
+
+- `state.ts`: Add `_serverEncoding` var + `getServerEncoding()` / `setServerEncoding()`.
+  Reset to `"UTF-8"` when credentials are cleared.
+- `index.ts` `establishConnection()`: After `setCredentials()`, fetch `SWE.optionPreferencesGeneral`
+  from `/{sessionId}/preferences/get` and call `setServerEncoding(data.defaultTextEncoding)`.
+  Failure is non-fatal (keeps default UTF-8).
+- `StudioWebServerAdapter.getContentOfItem()`: Change to `responseType: "arraybuffer"`,
+  decode with `new TextDecoder(getServerEncoding()).decode(response.data)`.
+- `StudioWebServerAdapter.updateContentOfItem()`: Remove wrong `ct` param; add
+  `?encoding=<enc>` when server encoding ≠ UTF-8 (server transcodes UTF-8 body → target).
+- `StudioWebServerAdapter.createNewItem()`: Fix `Buffer.from(buffer).toString()` →
+  `new TextDecoder("utf-8").decode(buffer)` (explicit); add same `?encoding` param.
