@@ -76,6 +76,8 @@ export function setCredentials(creds: StudioWebCredentials | undefined): void {
 
       if (!isCancel && !isSilent && error instanceof AxiosError && error.response) {
         const { status, data } = error.response;
+        const method = error.config?.method?.toUpperCase() ?? "REQUEST";
+        const url = error.config?.url ?? "";
         const detail =
           typeof data === "string"
             ? data.slice(0, 200)
@@ -86,7 +88,7 @@ export function setCredentials(creds: StudioWebCredentials | undefined): void {
               ? (data as { message: string }).message
               : "";
         window.showErrorMessage(
-          `HTTP ${status} error${detail ? ": " + detail : ""}`,
+          `HTTP ${status} error on ${method} ${url}${detail ? ": " + detail : ""}`,
         );
       }
       return Promise.reject(error);

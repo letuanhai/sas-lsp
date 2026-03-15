@@ -220,7 +220,7 @@ export class StudioWebSession extends Session {
       try {
         await axiosInstance.delete(
           `/sessions/${credentials.sessionId}/submissions`,
-          { params: { id: this._submissionId }, _silent: true },
+          { params: { id: this._submissionId } },
         );
       } catch {
         // Ignore errors on cancel
@@ -243,7 +243,7 @@ async function fetchServerEncoding(sessionId: string): Promise<void> {
     if (axiosInstance) {
       const prefsResp = await axiosInstance.get(
         `/${sessionId}/preferences/get`,
-        { params: { key: "SWE.optionPreferencesGeneral.key" }, _silent: true },
+        { params: { key: "SWE.optionPreferencesGeneral.key" } },
       );
       const enc: string = prefsResp.data?.defaultTextEncoding;
       if (enc) {
