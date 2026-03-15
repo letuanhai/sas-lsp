@@ -123,6 +123,7 @@ export class StudioWebSession extends Session {
       {
         params: { label: "Program", uri: "Program" },
         headers: { "Content-Type": "text/plain; charset=UTF-8" },
+        _silent: true, // errors bubble to run.ts onRunError
       },
     );
     this._submissionId = submission?.id;
@@ -134,6 +135,7 @@ export class StudioWebSession extends Session {
     while (!done && !this._cancelled) {
       const { data: messages } = await axiosInstance.get(
         `/sessions/${sessionId}/messages/longpoll`,
+        { _silent: true }, // errors bubble to run.ts onRunError
       );
 
       // Empty array means execution ended
@@ -218,7 +220,7 @@ export class StudioWebSession extends Session {
       try {
         await axiosInstance.delete(
           `/sessions/${credentials.sessionId}/submissions`,
-          { params: { id: this._submissionId } },
+          { params: { id: this._submissionId }, _silent: true },
         );
       } catch {
         // Ignore errors on cancel
@@ -241,7 +243,7 @@ async function fetchServerEncoding(sessionId: string): Promise<void> {
     if (axiosInstance) {
       const prefsResp = await axiosInstance.get(
         `/${sessionId}/preferences/get`,
-        { params: { key: "SWE.optionPreferencesGeneral.key" } },
+        { params: { key: "SWE.optionPreferencesGeneral.key" }, _silent: true },
       );
       const enc: string = prefsResp.data?.defaultTextEncoding;
       if (enc) {
