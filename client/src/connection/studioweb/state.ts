@@ -11,6 +11,7 @@ export interface StudioWebCredentials {
 let _credentials: StudioWebCredentials | undefined;
 let _axios: AxiosInstance | undefined;
 let _controller: AbortController | undefined;
+let _serverEncoding = "UTF-8";
 
 export function getCredentials(): StudioWebCredentials | undefined {
   return _credentials;
@@ -18,6 +19,16 @@ export function getCredentials(): StudioWebCredentials | undefined {
 
 export function getAxios(): AxiosInstance | undefined {
   return _axios;
+}
+
+/** Returns the server's default text encoding (e.g. "UTF-8", "ISO-8859-1"). */
+export function getServerEncoding(): string {
+  return _serverEncoding;
+}
+
+/** Sets the server's default text encoding. Call after fetching session preferences. */
+export function setServerEncoding(encoding: string): void {
+  _serverEncoding = encoding || "UTF-8";
 }
 
 export function setCredentials(creds: StudioWebCredentials | undefined): void {
@@ -44,5 +55,6 @@ export function setCredentials(creds: StudioWebCredentials | undefined): void {
     });
   } else {
     _axios = undefined;
+    _serverEncoding = "UTF-8";
   }
 }

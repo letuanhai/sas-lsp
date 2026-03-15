@@ -7,7 +7,12 @@ import { updateStatusBarItem } from "../../components/StatusBarItem";
 import { ConnectionType } from "../../components/profile";
 import { profileConfig } from "../../commands/profile";
 import { Session } from "../session";
-import { getAxios, getCredentials, setCredentials } from "./state";
+import {
+  getAxios,
+  getCredentials,
+  setCredentials,
+  setServerEncoding,
+} from "./state";
 import { Config } from "./types";
 export type { Config };
 
@@ -94,6 +99,24 @@ export class StudioWebSession extends Session {
       sessionId,
       cookieString,
     });
+
+    // Fetch the session's default text encoding from preferences.
+    // Endpoint: /{sessionId}/preferences/get?key=SWE.optionPreferencesGeneral.key
+    try {
+      const axiosInstance = getAxios();
+      if (axiosInstance) {
+        const prefsResp = await axiosInstance.get(
+          `/${sessionId}/preferences/get`,
+          { params: { key: "SWE.optionPreferencesGeneral.key" } },
+        );
+        const enc: string = prefsResp.data?.defaultTextEncoding;
+        if (enc) {
+          setServerEncoding(enc);
+        }
+      }
+    } catch {
+      // Preferences fetch failure is non-fatal; keep default UTF-8
+    }
 
     updateStatusBarItem(true);
   }
