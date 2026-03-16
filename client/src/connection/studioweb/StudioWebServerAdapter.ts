@@ -23,7 +23,7 @@ import {
 } from "../../components/ContentNavigator/utils";
 import { ProfileWithFileRootOptions } from "../../components/profile";
 import { ensureCredentials } from "./index";
-import { getAxios, getCredentials, getServerEncoding } from "./state";
+import { getAxios, getCredentials, getEncodeDoubleSlashes, getServerEncoding } from "./state";
 
 /**
  * Encode a filesystem path using SAS Studio's tilde notation for directory listing.
@@ -41,6 +41,22 @@ function encodeDirectoryPath(dirPath: string): string {
  */
 function encodeTreePath(path: string): string {
   return path.replace(/\//g, "~ps~");
+}
+
+/**
+ * Build the workspace URL for a session file path. When the profile has
+ * `encodeDoubleSlashes` enabled, any `//` in the path portion is replaced
+ * with `/~~ds~~` so that production SAS Studio hosts that require this
+ * encoding can resolve the request correctly.
+ */
+function workspaceUrl(sessionId: string, path: string): string {
+  let url = `/sessions/${sessionId}/workspace/${path}`;
+  if (getEncodeDoubleSlashes()) {
+    const [pathPart, ...queryParts] = url.split("?");
+    const encoded = pathPart.replace(/\/\//g, "/~~ds~~");
+    url = queryParts.length > 0 ? `${encoded}?${queryParts.join("?")}` : encoded;
+  }
+  return url;
 }
 
 interface WorkspaceEntry {
@@ -325,7 +341,7 @@ class StudioWebServerAdapter implements ContentAdapter {
       // SAS Studio 3.8 uses double-slash: GET /sasexec/sessions/{id}/workspace//{path}
       // Use arraybuffer so we get the raw bytes and can decode with the server's encoding.
       const response = await axios.get(
-        `/sessions/${creds.sessionId}/workspace/${item.uri}`,
+        workspaceUrl(creds.sessionId, item.uri),
         { responseType: "arraybuffer" },
       );
       return new TextDecoder(getServerEncoding()).decode(response.data);
@@ -365,7 +381,7 @@ class StudioWebServerAdapter implements ContentAdapter {
       encoding.toUpperCase() === "UTF-8" ? {} : { encoding };
     // Use double-slash pattern matching getContentOfItem (~~ds~~ returns 404)
     await axios.post(
-      `/sessions/${creds.sessionId}/workspace/${path}`,
+      workspaceUrl(creds.sessionId, path),
       content,
       {
         params: encodingParam,
@@ -387,7 +403,7 @@ class StudioWebServerAdapter implements ContentAdapter {
     try {
       // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
       await axios.delete(
-        `/sessions/${creds.sessionId}/workspace/${item.uri}`,
+        workspaceUrl(creds.sessionId, item.uri),
       );
       return true;
     } catch (error) {
@@ -431,7 +447,7 @@ class StudioWebServerAdapter implements ContentAdapter {
         encoding.toUpperCase() === "UTF-8" ? {} : { encoding };
       // Use double-slash pattern (~~ds~~ returns 404 on /sessions/ workspace endpoint)
       await axios.post(
-        `/sessions/${creds.sessionId}/workspace/${filePath}`,
+        workspaceUrl(creds.sessionId, filePath),
         content,
         {
           params: encodingParam,

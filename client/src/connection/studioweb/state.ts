@@ -22,6 +22,7 @@ let _credentials: StudioWebCredentials | undefined;
 let _axios: AxiosInstance | undefined;
 let _controller: AbortController | undefined;
 let _serverEncoding = "UTF-8";
+let _encodeDoubleSlashes = false;
 
 export function getCredentials(): StudioWebCredentials | undefined {
   return _credentials;
@@ -39,6 +40,16 @@ export function getServerEncoding(): string {
 /** Sets the server's default text encoding. Call after fetching session preferences. */
 export function setServerEncoding(encoding: string): void {
   _serverEncoding = encoding || "UTF-8";
+}
+
+/** Returns whether double slashes in workspace URLs should be encoded as /~~ds~~. */
+export function getEncodeDoubleSlashes(): boolean {
+  return _encodeDoubleSlashes;
+}
+
+/** Sets whether double slashes in workspace URLs should be encoded as /~~ds~~. */
+export function setEncodeDoubleSlashes(value: boolean): void {
+  _encodeDoubleSlashes = value;
 }
 
 export function setCredentials(creds: StudioWebCredentials | undefined): void {
@@ -96,5 +107,6 @@ export function setCredentials(creds: StudioWebCredentials | undefined): void {
   } else {
     _axios = undefined;
     _serverEncoding = "UTF-8";
+    _encodeDoubleSlashes = false;
   }
 }

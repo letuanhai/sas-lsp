@@ -109,6 +109,7 @@ export interface IOMProfile extends BaseProfile, ProfileWithFileRootOptions {
 export interface StudioWebProfile extends BaseProfile, ProfileWithFileRootOptions {
   connectionType: ConnectionType.StudioWeb;
   endpoint: string;
+  encodeDoubleSlashes?: boolean;
 }
 
 export type Profile = ViyaProfile | SSHProfile | COMProfile | IOMProfile | StudioWebProfile;
