@@ -1,6 +1,20 @@
 // Copyright © 2023, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import { Uri, commands, window } from "vscode";
+import { QuickInputButton, ThemeIcon, Uri, commands, window } from "vscode";
+
+// Module-level active item — lets the keybinding command (`SAS.server.quickBrowseReveal`)
+// read which file/folder is currently highlighted in the QuickPick.
+let _activeItem: ContentItem | undefined;
+export function getActiveItem(): ContentItem | undefined {
+  return _activeItem;
+}
+
+// Button shown on each file/folder item — clicking it reveals the item in the
+// SAS sidebar file tree without closing the QuickPick.
+const REVEAL_BUTTON: QuickInputButton = {
+  iconPath: new ThemeIcon("list-tree"),
+  tooltip: "Reveal in SAS File Tree (or press Shift+Enter)",
+};
 
 import { ContentModel } from "./ContentModel";
 import { ContentItem, Link } from "./types";
@@ -69,6 +83,7 @@ interface FolderItem {
   description: string;
   detail?: string;
   item: ContentItem;
+  buttons: readonly QuickInputButton[];
 }
 
 interface FileItem {
@@ -76,6 +91,7 @@ interface FileItem {
   label: string;
   description?: string;
   item: ContentItem;
+  buttons: readonly QuickInputButton[];
 }
 
 interface GotoItem {
@@ -103,8 +119,17 @@ interface BrowserQuickPick {
   matchOnDetail: boolean;
   ignoreFocusOut: boolean;
   onDidAccept(listener: () => void): { dispose(): void };
+  onDidChangeActive(
+    listener: (items: readonly BrowserQuickPickItem[]) => void,
+  ): { dispose(): void };
   onDidChangeValue(listener: (value: string) => void): { dispose(): void };
   onDidHide(listener: () => void): { dispose(): void };
+  onDidTriggerItemButton(
+    listener: (e: {
+      button: QuickInputButton;
+      item: BrowserQuickPickItem;
+    }) => void,
+  ): { dispose(): void };
   show(): void;
   hide(): void;
   dispose(): void;
@@ -116,9 +141,14 @@ interface BrowserQuickPick {
 
 export default class QuickFileBrowser {
   private contentModel: ContentModel;
+  private onReveal: ((item: ContentItem) => void) | undefined;
 
-  constructor(contentModel: ContentModel) {
+  constructor(
+    contentModel: ContentModel,
+    onReveal?: (item: ContentItem) => void,
+  ) {
     this.contentModel = contentModel;
+    this.onReveal = onReveal;
   }
 
   async show(arg?: ContentItem | string): Promise<void> {
@@ -128,7 +158,8 @@ export default class QuickFileBrowser {
     qp.matchOnDescription = true;
     qp.matchOnDetail = true;
     qp.ignoreFocusOut = true;
-    qp.placeholder = "Type to filter. / to jump to path. ↵ to open.";
+    qp.placeholder =
+      "Type to filter. / to jump to path. ↵ open  Shift+Enter reveal.";
 
     // Navigation stack: last element is the current folder; empty = root
     const stack: ContentItem[] = [];
@@ -214,11 +245,29 @@ export default class QuickFileBrowser {
       }
     });
 
+    qp.onDidChangeActive((active) => {
+      const first = active[0];
+      _activeItem =
+        first?.kind === "folder" || first?.kind === "file"
+          ? first.item
+          : undefined;
+    });
+
+    qp.onDidTriggerItemButton((e) => {
+      const it = e.item;
+      if ((it.kind === "folder" || it.kind === "file") && this.onReveal) {
+        this.onReveal(it.item);
+      }
+    });
+
     qp.onDidHide(() => {
+      _activeItem = undefined;
+      void commands.executeCommand("setContext", "SAS.quickBrowseOpen", false);
       cache.clear();
       qp.dispose();
     });
 
+    void commands.executeCommand("setContext", "SAS.quickBrowseOpen", true);
     qp.show();
     reload();
   }
@@ -257,7 +306,8 @@ export default class QuickFileBrowser {
       currentPath === "/" || currentPath === "root"
         ? "SAS Server"
         : currentPath;
-    qp.placeholder = "Type to filter. / to jump to path. ↵ to open.";
+    qp.placeholder =
+      "Type to filter. / to jump to path. ↵ open  Shift+Enter reveal.";
 
     const sorted = sortContentItems(children);
 
@@ -273,6 +323,7 @@ export default class QuickFileBrowser {
         label: `$(folder) ${item.name}`,
         description: item.uri,
         item,
+        buttons: [REVEAL_BUTTON],
       }));
 
     const fileItems: FileItem[] = sorted
@@ -281,6 +332,7 @@ export default class QuickFileBrowser {
         kind: "file" as const,
         label: `$(file) ${item.name}`,
         item,
+        buttons: [REVEAL_BUTTON],
       }));
 
     qp.items = [...parentItems, ...folderItems, ...fileItems];

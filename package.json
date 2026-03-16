@@ -832,6 +832,11 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "SAS.server.quickBrowseReveal",
+        "title": "Quick Browser: Reveal in SAS File Tree",
+        "category": "SAS"
+      },
+      {
         "command": "SAS.refreshLibraries",
         "title": "%commands.SAS.refresh%",
         "category": "SAS",
@@ -892,6 +897,11 @@
       }
     ],
     "keybindings": [
+      {
+        "key": "shift+enter",
+        "command": "SAS.server.quickBrowseReveal",
+        "when": "SAS.quickBrowseOpen"
+      },
       {
         "when": "editorFocus && (editorLangId == sas || (editorLangId == python && resourceScheme =~ /^sas(Content|Server).*/)) && !SAS.hideRunMenuItem",
         "command": "SAS.run",
@@ -1163,6 +1173,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "SAS.server.quickBrowseReveal",
+          "when": "false"
+        },
         {
           "when": "(editorLangId == sas || (editorLangId == python && resourceScheme =~ /^sas(Content|Server).*/)) && !SAS.hideRunMenuItem",
           "command": "SAS.run"
