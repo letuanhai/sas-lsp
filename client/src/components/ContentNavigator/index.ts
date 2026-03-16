@@ -23,6 +23,7 @@ import { treeViewSelections } from "../utils/treeViewSelections";
 import ContentAdapterFactory from "./ContentAdapterFactory";
 import ContentDataProvider from "./ContentDataProvider";
 import { ContentModel } from "./ContentModel";
+import QuickFileBrowser from "./QuickFileBrowser";
 import { Messages } from "./const";
 import { NotebookToFlowConverter } from "./convert";
 import {
@@ -477,6 +478,20 @@ class ContentNavigator implements SubscriptionProvider {
           }
         },
       ),
+      ...(this.sourceType === ContentSourceType.SASServer
+        ? [
+            commands.registerCommand(
+              `${SAS}.quickBrowse`,
+              async (arg?: ContentItem | string) => {
+                if (!this.contentModel.connected()) {
+                  await this.contentModel.connect(this.viyaEndpoint());
+                }
+                const browser = new QuickFileBrowser(this.contentModel);
+                await browser.show(arg);
+              },
+            ),
+          ]
+        : []),
       workspace.onDidChangeConfiguration(
         async (event: ConfigurationChangeEvent) => {
           if (event.affectsConfiguration("SAS.connectionProfiles")) {
