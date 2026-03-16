@@ -154,6 +154,7 @@ export default class QuickFileBrowser {
   async show(arg?: ContentItem | string): Promise<void> {
     // window.createQuickPick() returns QuickPick<QuickPickItem>; we widen it to
     // our BrowserQuickPick type which uses a string-literal `kind` discriminant.
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const qp = window.createQuickPick() as unknown as BrowserQuickPick;
     qp.matchOnDescription = true;
     qp.matchOnDetail = true;
@@ -286,7 +287,6 @@ export default class QuickFileBrowser {
 
     let children: ContentItem[];
     if (cache.has(cacheKey)) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       children = cache.get(cacheKey)!;
     } else {
       children = await this.contentModel.getChildren(folder);
