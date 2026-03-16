@@ -23,7 +23,7 @@ import { treeViewSelections } from "../utils/treeViewSelections";
 import ContentAdapterFactory from "./ContentAdapterFactory";
 import ContentDataProvider from "./ContentDataProvider";
 import { ContentModel } from "./ContentModel";
-import QuickFileBrowser from "./QuickFileBrowser";
+import QuickFileBrowser, { getActiveItem } from "./QuickFileBrowser";
 import { Messages } from "./const";
 import { NotebookToFlowConverter } from "./convert";
 import {
@@ -486,10 +486,19 @@ class ContentNavigator implements SubscriptionProvider {
                 if (!this.contentModel.connected()) {
                   await this.contentModel.connect(this.viyaEndpoint());
                 }
-                const browser = new QuickFileBrowser(this.contentModel);
+                const browser = new QuickFileBrowser(
+                  this.contentModel,
+                  (item) => this.contentDataProvider.reveal(item),
+                );
                 await browser.show(arg);
               },
             ),
+            commands.registerCommand(`${SAS}.quickBrowseReveal`, () => {
+              const item = getActiveItem();
+              if (item) {
+                this.contentDataProvider.reveal(item);
+              }
+            }),
           ]
         : []),
       workspace.onDidChangeConfiguration(
