@@ -11,6 +11,7 @@ import {
   getAxios,
   getCredentials,
   setCredentials,
+  setEncodeDoubleSlashes,
   setServerEncoding,
 } from "./state";
 import { Config } from "./types";
@@ -298,6 +299,11 @@ export async function ensureCredentials(): Promise<boolean> {
   }
 
   setCredentials({ endpoint, sessionId, cookieString });
+  setEncodeDoubleSlashes(
+    profile?.connectionType === ConnectionType.StudioWeb
+      ? (profile.encodeDoubleSlashes ?? false)
+      : false,
+  );
   await fetchServerEncoding(sessionId);
   return true;
 }
@@ -335,6 +341,12 @@ export async function promptNewSession(): Promise<void> {
   }
 
   setCredentials({ endpoint, sessionId, cookieString });
+  const activeProfile = profileConfig.getActiveProfileDetail()?.profile;
+  setEncodeDoubleSlashes(
+    activeProfile?.connectionType === ConnectionType.StudioWeb
+      ? (activeProfile.encodeDoubleSlashes ?? false)
+      : false,
+  );
 }
 
 /**

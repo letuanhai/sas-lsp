@@ -55,6 +55,7 @@
   "configuration.SAS.connectionProfiles.profiles.iom.port": "SAS IOM Connection port",
   "configuration.SAS.connectionProfiles.profiles.iom.username": "SAS IOM Connection username",
   "configuration.SAS.connectionProfiles.profiles.name": "SAS Connection Profile Name",
+  "configuration.SAS.connectionProfiles.profiles.studioweb.encodeDoubleSlashes": "Encode double slashes in workspace URLs as /~~ds~~ (required for some SAS Studio hosts)",
   "configuration.SAS.connectionProfiles.profiles.sasOptions": "SAS Connection SAS options",
   "configuration.SAS.connectionProfiles.profiles.ssh.host": "SAS SSH Connection SSH Host",
   "configuration.SAS.connectionProfiles.profiles.ssh.port": "SAS SSH Connection port",

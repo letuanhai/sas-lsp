@@ -183,7 +183,8 @@
                         "rest",
                         "ssh",
                         "com",
-                        "iom"
+                        "iom",
+                        "studioweb"
                       ]
                     },
                     "sasOptions": {
@@ -433,6 +434,47 @@
                             "type": "string",
                             "default": "",
                             "description": "%configuration.SAS.connectionProfiles.profiles.com.interopLibraryFolderPath%"
+                          },
+                          "fileNavigationCustomRootPath": {
+                            "type": "string",
+                            "default": "",
+                            "description": "%configuration.SAS.connectionProfiles.profiles.fileNavigationCustomRootPath%"
+                          },
+                          "fileNavigationRoot": {
+                            "type": "string",
+                            "default": "USER",
+                            "description": "%configuration.SAS.connectionProfiles.profiles.fileNavigationRoot%",
+                            "enum": [
+                              "CUSTOM",
+                              "USER",
+                              "SYSTEM"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "connectionType": {
+                            "const": "studioweb"
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "endpoint"
+                        ],
+                        "properties": {
+                          "endpoint": {
+                            "type": "string",
+                            "default": "",
+                            "description": "%configuration.SAS.connectionProfiles.profiles.endpoint%"
+                          },
+                          "encodeDoubleSlashes": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "%configuration.SAS.connectionProfiles.profiles.studioweb.encodeDoubleSlashes%"
                           },
                           "fileNavigationCustomRootPath": {
                             "type": "string",
