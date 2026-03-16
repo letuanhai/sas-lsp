@@ -44,6 +44,82 @@ export function syntheticFolder(path: string): ContentItem {
   };
 }
 
+export function fileIcon(name: string): ThemeIcon {
+  const dot = name.lastIndexOf(".");
+  const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+  switch (ext) {
+    case "sas":
+    case "py":
+    case "r":
+    case "rmd":
+    case "js":
+    case "ts":
+    case "jsx":
+    case "tsx":
+    case "html":
+    case "htm":
+    case "xml":
+    case "json":
+    case "jsonc":
+    case "css":
+    case "scss":
+    case "less":
+    case "yaml":
+    case "yml":
+    case "sh":
+    case "bash":
+    case "c":
+    case "cpp":
+    case "h":
+    case "java":
+    case "cs":
+    case "go":
+    case "rs":
+    case "php":
+    case "rb":
+      return new ThemeIcon("file-code");
+    case "txt":
+    case "log":
+    case "rst":
+      return new ThemeIcon("file-text");
+    case "md":
+    case "markdown":
+      return new ThemeIcon("markdown");
+    case "csv":
+    case "tsv":
+    case "xls":
+    case "xlsx":
+      return new ThemeIcon("table");
+    case "sql":
+    case "sas7bdat":
+    case "parquet":
+    case "feather":
+    case "h5":
+    case "hdf5":
+    case "db":
+    case "sqlite":
+    case "sqlite3":
+      return new ThemeIcon("database");
+    case "zip":
+    case "tar":
+    case "gz":
+    case "bz2":
+    case "exe":
+    case "dll":
+    case "so":
+    case "png":
+    case "jpg":
+    case "jpeg":
+    case "gif":
+    case "svg":
+    case "ico":
+    case "pdf":
+      return new ThemeIcon("file-binary");
+    default:
+      return new ThemeIcon("file");
+  }
+}
+
 export function isFolder(item: ContentItem): boolean {
   return (
     item.links?.some((l) => l.rel === "getDirectoryMembers") === true ||
@@ -91,7 +167,7 @@ interface FolderItem {
 interface FileItem {
   kind: "file";
   label: string;
-  iconPath: Uri;
+  iconPath: ThemeIcon;
   description?: string;
   item: ContentItem;
   buttons: readonly QuickInputButton[];
@@ -335,10 +411,7 @@ export default class QuickFileBrowser {
       .map((item) => ({
         kind: "file" as const,
         label: item.name,
-        // Uri.file(name) causes VS Code's QuickPick renderer to resolve the icon
-        // from the active file icon theme based on the filename/extension,
-        // matching the behaviour of the SAS sidebar file tree.
-        iconPath: Uri.file(item.name),
+        iconPath: fileIcon(item.name),
         item,
         buttons: [REVEAL_BUTTON],
       }));
