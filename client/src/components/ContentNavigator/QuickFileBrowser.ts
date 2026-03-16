@@ -74,12 +74,14 @@ export function sortContentItems(items: ContentItem[]): ContentItem[] {
 interface ParentItem {
   kind: "parent";
   label: string;
+  iconPath?: ThemeIcon;
   description?: string;
 }
 
 interface FolderItem {
   kind: "folder";
   label: string;
+  iconPath: ThemeIcon;
   description: string;
   detail?: string;
   item: ContentItem;
@@ -89,6 +91,7 @@ interface FolderItem {
 interface FileItem {
   kind: "file";
   label: string;
+  iconPath: Uri;
   description?: string;
   item: ContentItem;
   buttons: readonly QuickInputButton[];
@@ -313,14 +316,15 @@ export default class QuickFileBrowser {
 
     const parentItems: ParentItem[] =
       stack.length > 0
-        ? [{ kind: "parent", label: "$(arrow-left) .." }]
+        ? [{ kind: "parent", label: "..", iconPath: new ThemeIcon("arrow-left") }]
         : [];
 
     const folderItems: FolderItem[] = sorted
       .filter(isFolder)
       .map((item) => ({
         kind: "folder" as const,
-        label: `$(folder) ${item.name}`,
+        label: item.name,
+        iconPath: new ThemeIcon("folder"),
         description: item.uri,
         item,
         buttons: [REVEAL_BUTTON],
@@ -330,7 +334,11 @@ export default class QuickFileBrowser {
       .filter((item) => !isFolder(item))
       .map((item) => ({
         kind: "file" as const,
-        label: `$(file) ${item.name}`,
+        label: item.name,
+        // Uri.file(name) causes VS Code's QuickPick renderer to resolve the icon
+        // from the active file icon theme based on the filename/extension,
+        // matching the behaviour of the SAS sidebar file tree.
+        iconPath: Uri.file(item.name),
         item,
         buttons: [REVEAL_BUTTON],
       }));
