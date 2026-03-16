@@ -10,6 +10,7 @@ import {
 import {
   ContentAdapter,
   ContentItem,
+  Link,
   RootFolderMap,
 } from "../../components/ContentNavigator/types";
 import {
@@ -21,7 +22,6 @@ import {
   sortedContentItems,
 } from "../../components/ContentNavigator/utils";
 import { ProfileWithFileRootOptions } from "../../components/profile";
-import { getSasServerUri } from "../rest/util";
 import { ensureCredentials } from "./index";
 import { getAxios, getCredentials, getServerEncoding } from "./state";
 
@@ -96,7 +96,7 @@ class StudioWebServerAdapter implements ContentAdapter {
     return undefined;
   }
 
-  public async connect(_baseUrl: string): Promise<void> {
+  public async connect(): Promise<void> {
     // no-op: credentials are managed by StudioWebSession via state.ts
   }
 
@@ -267,7 +267,7 @@ class StudioWebServerAdapter implements ContentAdapter {
         type: "GET",
       },
       { method: "GET", rel: "self", href: uri, uri: uri, type: "GET" },
-    ].filter(Boolean) as ContentItem["links"];
+    ].filter((x): x is Link => !!x);
 
     const item: ContentItem = {
       id: uri,
@@ -328,9 +328,7 @@ class StudioWebServerAdapter implements ContentAdapter {
         `/sessions/${creds.sessionId}/workspace/${item.uri}`,
         { responseType: "arraybuffer" },
       );
-      return new TextDecoder(getServerEncoding()).decode(
-        response.data as ArrayBuffer,
-      );
+      return new TextDecoder(getServerEncoding()).decode(response.data);
     } catch (error) {
       console.error("StudioWebServerAdapter.getContentOfItem error:", error);
       return "";
