@@ -84,8 +84,8 @@ export function setCredentials(creds: StudioWebCredentials | undefined): void {
             : typeof data === "object" &&
                 data !== null &&
                 "message" in data &&
-                typeof (data as { message: unknown }).message === "string"
-              ? (data as { message: string }).message
+                typeof data.message === "string"
+              ? data.message
               : "";
         window.showErrorMessage(
           `HTTP ${status} error on ${method} ${url}${detail ? ": " + detail : ""}`,

@@ -167,14 +167,16 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
             ? { name: col.informat }
             : (col.informat ?? { name: "" }),
         // Compute the icon type using the shared utility
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ...(() => {
+          const fmt = col.format;
           const iconType = getColumnIconType({
             index,
             type: String(col.type ?? "char"),
             name: String(col.name ?? ""),
             format: String(
-              (col.format as Record<string, unknown>)?.name ?? col.format ?? "",
+              typeof fmt === "object" && fmt !== null && "name" in fmt
+                ? fmt.name
+                : fmt ?? "",
             ),
           });
           return { type: iconType };
@@ -383,17 +385,14 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
       }
 
       // Poll until complete
-      await this.pollUntilComplete(creds.sessionId, submissionId);
+      await this.pollUntilComplete(creds.sessionId);
     } catch (error) {
       console.error("StudioWebLibraryAdapter.deleteTable error:", error);
       throw error;
     }
   }
 
-  private async pollUntilComplete(
-    sessionId: string,
-    _submissionId: string,
-  ): Promise<void> {
+  private async pollUntilComplete(sessionId: string): Promise<void> {
     const axios = getAxios();
     if (!axios) {
       return;
