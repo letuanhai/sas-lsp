@@ -373,8 +373,8 @@ class StudioWebLibraryAdapter implements LibraryAdapter {
         { headers: { "Content-Type": "application/json" } },
       );
 
-      const submissionId: string =
-        submitResponse.data?.id ?? submitResponse.data?.submissionId ?? "";
+      // asyncSubmissions returns a bare UUID string, not an object
+      const submissionId: string = submitResponse.data ?? "";
 
       if (!submissionId) {
         // Fall back: try synchronous submission if async is not available

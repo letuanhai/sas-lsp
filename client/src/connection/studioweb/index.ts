@@ -126,7 +126,8 @@ export class StudioWebSession extends Session {
         _silent: true, // errors bubble to run.ts onRunError
       },
     );
-    this._submissionId = submission?.id;
+    // asyncSubmissions returns a bare UUID string, not an object
+    this._submissionId = submission;
 
     // Poll for results
     let runResult: RunResult = {};
