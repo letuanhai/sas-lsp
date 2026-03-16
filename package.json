@@ -826,6 +826,12 @@
         "category": "SAS"
       },
       {
+        "command": "SAS.server.quickBrowse",
+        "title": "Browse Server Files",
+        "category": "SAS",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "SAS.refreshLibraries",
         "title": "%commands.SAS.refresh%",
         "category": "SAS",
@@ -940,6 +946,11 @@
           "command": "SAS.server.collapseAllContent",
           "when": "view == serverdataprovider",
           "group": "navigation@1"
+        },
+        {
+          "command": "SAS.server.quickBrowse",
+          "when": "SAS.serverEnabled",
+          "group": "navigation"
         },
         {
           "command": "SAS.refreshLibraries",
