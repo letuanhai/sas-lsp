@@ -188,3 +188,7 @@ The SAS server is also accessible via SSH:
 - **Command:** `ssh sasdemo@192.168.0.141`
 
 SSH access is useful for inspecting server-side logs, running SAS commands directly, or debugging connection issues outside of the extension.
+
+## Do Not
+
+- Do not commit until the user explicitly ask for
