@@ -1,7 +1,18 @@
 - [x] show output dataset from submission
 - [x] show error messages noti when http error code
+- [ ] add action to focus sas sidebar file content/libraries section
+- [ ] fix sas sidebar file content/libraries section filtering
 
 ## ✅ Task 6: Quick File Browser (QuickPick-based server file navigation) — branch: feat/task6-quick-file-browser
+
+- [ ] fix reveal file functions
+- [ ] add quickinput key bindings: Tab to put currently focused item name in input box, Alt/Option+C to copy the focused item path (uri)
+- [ ] fix place holder text button name
+- [ ] change absolute path handling: show parent folder with filename in filter
+- [ ] action to start browsing at current opened editor file path
+- [ ] add history/bookmarks for quick file browser
+- [ ] allow configuring root browsing path
+- [ ] change item description: for folder show number of chilren and last modified time, for file show file size and last modified time; keep item uri as tooltip
 
 A keyboard-friendly file browser using `window.createQuickPick()` that composes the
 existing `ContentModel`/`ContentAdapter` without modifying tree view code. Provides
@@ -118,4 +129,6 @@ Test the non-vscode logic:
 - ✅ Task 3: Drag-and-drop confirmation message
 - ✅ Task 4: Support opening SAS dataset (.sas7bdat) file in data view
 - ✅ Task 5: Support read/write with server encoding (not UTF-8)
+    - [ ] ready raw bytes
+    - [ ] write raw bytes
 - ✅ Task 6: Quick File Browser — `SAS.server.quickBrowse` command; `Shift+Enter` reveals highlighted item in SAS sidebar file tree; `$(list-tree)` per-item button does the same inline
