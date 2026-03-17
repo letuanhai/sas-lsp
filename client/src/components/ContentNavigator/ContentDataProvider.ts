@@ -539,8 +539,8 @@ class ContentDataProvider
   public reveal(item: ContentItem): void {
     this._treeView.reveal(item, {
       expand: true,
-      select: false,
-      focus: false,
+      select: true,
+      focus: true,
     }).then(undefined, () => {
       // Swallow errors — a failed reveal should never block the user.
       // This can happen when an item has no stable uid (e.g. server-side

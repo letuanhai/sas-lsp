@@ -627,7 +627,7 @@ class StudioWebServerAdapter implements ContentAdapter {
       return this.rootFolders[SAS_SERVER_ROOT_FOLDERS[0]];
     }
     try {
-      return await this.getItemAtPath(item.parentFolderUri);
+      return await this.getItemAtPath(item.parentFolderUri, true);
     } catch {
       return undefined;
     }
@@ -642,7 +642,10 @@ class StudioWebServerAdapter implements ContentAdapter {
   }
 
   /** Retrieve a ContentItem for a given filesystem path. */
-  private async getItemAtPath(path: string): Promise<ContentItem> {
+  private async getItemAtPath(
+    path: string,
+    isDirectory = false,
+  ): Promise<ContentItem> {
     // Derive parent path and name from the path
     const normalised = path.replace(/\/$/, "");
     const lastSlash = normalised.lastIndexOf("/");
@@ -650,7 +653,7 @@ class StudioWebServerAdapter implements ContentAdapter {
     const parentPath = lastSlash > 0 ? normalised.slice(0, lastSlash) : "/";
 
     return this.convertEntryToContentItem(
-      { name, uri: path, isDirectory: false },
+      { name, uri: path, isDirectory },
       parentPath,
     );
   }
