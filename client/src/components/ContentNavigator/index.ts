@@ -68,8 +68,10 @@ class ContentNavigator implements SubscriptionProvider {
   private contentModel: ContentModel;
   private sourceType: ContentNavigatorConfig["sourceType"];
   private treeIdentifier: ContentNavigatorConfig["treeIdentifier"];
+  private extensionUri: Uri;
 
   constructor(context: ExtensionContext, config: ContentNavigatorConfig) {
+    this.extensionUri = context.extensionUri;
     this.sourceType = config.sourceType;
     this.treeIdentifier = config.treeIdentifier;
     this.contentModel = new ContentModel(
@@ -489,6 +491,7 @@ class ContentNavigator implements SubscriptionProvider {
                 const browser = new QuickFileBrowser(
                   this.contentModel,
                   (item) => this.contentDataProvider.reveal(item),
+                  this.extensionUri,
                 );
                 await browser.show(arg);
               },

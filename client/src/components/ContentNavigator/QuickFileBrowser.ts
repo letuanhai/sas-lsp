@@ -168,9 +168,9 @@ interface FolderItem {
 interface FileItem {
   kind: "file";
   label: string;
-  // ThemeIcon.File + resourceUri causes VS Code to resolve the icon from the
-  // active file icon theme, identical to TreeItem.resourceUri behaviour.
-  iconPath: ThemeIcon;
+  // ThemeIcon.File + resourceUri: VS Code resolves from the active file icon theme.
+  // { light, dark } iconPath: explicit override (e.g. for .sas7bdat).
+  iconPath: ThemeIcon | { light: Uri; dark: Uri };
   resourceUri: Uri;
   description?: string;
   item: ContentItem;
@@ -225,13 +225,16 @@ interface BrowserQuickPick {
 export default class QuickFileBrowser {
   private contentModel: ContentModel;
   private onReveal: ((item: ContentItem) => void) | undefined;
+  private extensionUri: Uri | undefined;
 
   constructor(
     contentModel: ContentModel,
     onReveal?: (item: ContentItem) => void,
+    extensionUri?: Uri,
   ) {
     this.contentModel = contentModel;
     this.onReveal = onReveal;
+    this.extensionUri = extensionUri;
   }
 
   async show(arg?: ContentItem | string): Promise<void> {
@@ -415,7 +418,7 @@ export default class QuickFileBrowser {
       .map((item) => ({
         kind: "file" as const,
         label: item.name,
-        iconPath: ThemeIcon.File,
+        iconPath: this.iconPathForFile(item.name),
         resourceUri: Uri.file(item.name),
         item,
         buttons: [REVEAL_BUTTON],
@@ -424,5 +427,20 @@ export default class QuickFileBrowser {
     qp.items = [...parentItems, ...folderItems, ...fileItems];
     // Clear the text filter so the new directory's items show unfiltered
     qp.value = "";
+  }
+
+  private iconPathForFile(
+    name: string,
+  ): ThemeIcon | { light: Uri; dark: Uri } {
+    if (this.extensionUri && name.toLowerCase().endsWith(".sas7bdat")) {
+      return {
+        dark: Uri.joinPath(this.extensionUri, "icons/dark/sasDataSetDark.svg"),
+        light: Uri.joinPath(
+          this.extensionUri,
+          "icons/light/sasDataSetLight.svg",
+        ),
+      };
+    }
+    return ThemeIcon.File;
   }
 }

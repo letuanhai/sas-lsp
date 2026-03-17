@@ -901,7 +901,9 @@ class ContentDataProvider
   ): undefined | { light: Uri; dark: Uri } {
     const isContainer = getIsContainer(item);
     let icon = "";
-    if (isContainer) {
+    if (!isContainer && item.name.toLowerCase().endsWith(".sas7bdat")) {
+      icon = "sasDataSet";
+    } else if (isContainer) {
       const type = item.typeName;
       switch (type) {
         case ROOT_FOLDER_TYPE:
