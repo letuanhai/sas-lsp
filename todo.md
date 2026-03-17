@@ -1,7 +1,8 @@
 - [x] show output dataset from submission
 - [x] show error messages noti when http error code
-- [ ] add action to focus sas sidebar file content/libraries section
-- [ ] fix sas sidebar file content/libraries section filtering
+- [ ] add actions (to map keybinding) to focus sas sidebar file content/libraries section
+- [ ] add actions/buttons to create new file/folder in the file content tree
+- [-] fix sas sidebar file content/libraries section filtering: no need seems to work as expected, keep collapsed folders that is not loaded yet or containing matches
 
 ## ✅ Task 6: Quick File Browser (QuickPick-based server file navigation) — branch: feat/task6-quick-file-browser
 
