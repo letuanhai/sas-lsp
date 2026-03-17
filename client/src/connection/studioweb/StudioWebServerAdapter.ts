@@ -78,6 +78,12 @@ interface WorkspaceEntry {
 class StudioWebServerAdapter implements ContentAdapter {
   private rootFolders: RootFolderMap;
   private contextMenuProvider: ContextMenuProvider;
+  // Maps URI → ContentItem for each direct logical child of the root node.
+  // Populated by getChildItems(SERVER_FOLDER_ID) and used by getParentOfItem
+  // so that the parent chain returned to TreeView.reveal() uses items whose
+  // uid exactly matches what getChildren() returns, rather than synthetic items
+  // built from physical paths (which may not exist in the logical tree).
+  private rootChildrenByUri = new Map<string, ContentItem>();
 
   public constructor(
     protected readonly fileNavigationCustomRootPath: ProfileWithFileRootOptions["fileNavigationCustomRootPath"],
@@ -128,12 +134,12 @@ class StudioWebServerAdapter implements ContentAdapter {
     for (let index = 0; index < SAS_SERVER_ROOT_FOLDERS.length; ++index) {
       const delegateFolderName = SAS_SERVER_ROOT_FOLDERS[index];
       this.rootFolders[delegateFolderName] = {
-        uid: `${index}`,
         ...convertStaticFolderToContentItem(SAS_SERVER_ROOT_FOLDER, {
           write: false,
           delete: false,
           addMember: false,
         }),
+        uid: `${index}`,
       };
     }
     return this.rootFolders;
@@ -191,7 +197,11 @@ class StudioWebServerAdapter implements ContentAdapter {
             );
           });
 
-        return sortedContentItems(childItems);
+        const sorted = sortedContentItems(childItems);
+        // Cache so getParentOfItem can return the correct item (with matching uid)
+        // when traversing up from a file inside one of these root children.
+        this.rootChildrenByUri = new Map(sorted.map((i) => [i.uri, i]));
+        return sorted;
       } catch (error) {
         console.error("StudioWebServerAdapter.getChildItems(_root_) error:", error);
         return [];
@@ -293,7 +303,7 @@ class StudioWebServerAdapter implements ContentAdapter {
       creationTimeStamp,
       modifiedTimeStamp,
       links,
-      parentFolderUri: entry.parentFolderUri ?? entry.uriParent ?? parentPath,
+      parentFolderUri: entry.parentFolderUri || entry.uriParent || parentPath,
       permission: {
         write: true,
         delete: true,
@@ -617,15 +627,33 @@ class StudioWebServerAdapter implements ContentAdapter {
   public async getParentOfItem(
     item: ContentItem,
   ): Promise<ContentItem | undefined> {
+    const rootNode = this.rootFolders[SAS_SERVER_ROOT_FOLDERS[0]];
+
+    // If item itself is a direct logical child of the root (e.g. /folders/myfolders),
+    // its physical parent path (e.g. /folders) does not exist as a tree node.
+    // Check this BEFORE the parentFolderUri guard because parentFolderUri may be
+    // empty (""), physically wrong, or missing for root children.
+    if (this.rootChildrenByUri.has(item.uri)) {
+      return rootNode;
+    }
+
     if (!item.parentFolderUri) {
       return undefined;
     }
+
     // Items whose parent is the filesystem root ("/") are direct children of
-    // the virtual "SAS Server" root node — return that node so VS Code can
-    // resolve the full parent chain when revealing items in the tree.
+    // the virtual "SAS Server" root node.
     if (item.parentFolderUri === "/" || item.parentFolderUri === SERVER_FOLDER_ID) {
-      return this.rootFolders[SAS_SERVER_ROOT_FOLDERS[0]];
+      return rootNode;
     }
+
+    // If item's physical parent is a direct logical root child, return the
+    // cached ContentItem so its uid exactly matches what getChildren returns.
+    const cachedParent = this.rootChildrenByUri.get(item.parentFolderUri);
+    if (cachedParent) {
+      return cachedParent;
+    }
+
     try {
       return await this.getItemAtPath(item.parentFolderUri, true);
     } catch {
