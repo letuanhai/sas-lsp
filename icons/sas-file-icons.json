@@ -1,0 +1,17 @@
+{
+  "iconDefinitions": {
+    "_sas_dataset": {
+      "iconPath": "./dark/sasDataSetDark.svg"
+    }
+  },
+  "fileExtensions": {
+    "sas7bdat": "_sas_dataset"
+  },
+  "light": {
+    "iconDefinitions": {
+      "_sas_dataset": {
+        "iconPath": "./light/sasDataSetLight.svg"
+      }
+    }
+  }
+}

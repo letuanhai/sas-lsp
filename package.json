@@ -30,6 +30,13 @@
     "virtualWorkspaces": true
   },
   "contributes": {
+    "fileIconThemes": [
+      {
+        "id": "sas-file-icons",
+        "label": "SAS File Icons",
+        "path": "./icons/sas-file-icons.json"
+      }
+    ],
     "authentication": [
       {
         "id": "SAS",
