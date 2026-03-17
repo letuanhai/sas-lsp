@@ -16,7 +16,7 @@ export function getActiveItem(): ContentItem | undefined {
 // SAS sidebar file tree without closing the QuickPick.
 const REVEAL_BUTTON: QuickInputButton = {
   iconPath: new ThemeIcon("list-tree"),
-  tooltip: "Reveal in SAS File Tree (or press Shift+Enter)",
+  tooltip: "Reveal in SAS File Tree (or press Alt+Enter)",
 };
 
 // ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@ export default class QuickFileBrowser {
     qp.matchOnDetail = true;
     qp.ignoreFocusOut = true;
     qp.placeholder =
-      "Type to filter. / to jump to path. ↵ open  Shift+Enter reveal.";
+      "Type to filter. / to jump to path. ↵ open  Alt+Enter reveal.";
 
     // Navigation stack: last element is the current folder; empty = root
     const stack: ContentItem[] = [];
@@ -316,7 +316,7 @@ export default class QuickFileBrowser {
         ? "SAS Server"
         : currentPath;
     qp.placeholder =
-      "Type to filter. / to jump to path. ↵ open  Shift+Enter reveal.";
+      "Type to filter. / to jump to path. ↵ open  Alt+Enter reveal.";
 
     const sorted = sortContentItems(children);
 

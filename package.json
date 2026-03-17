@@ -947,7 +947,7 @@
     ],
     "keybindings": [
       {
-        "key": "shift+enter",
+        "key": "alt+enter",
         "command": "SAS.server.quickBrowseReveal",
         "when": "SAS.quickBrowseOpen"
       },

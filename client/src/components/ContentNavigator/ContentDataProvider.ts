@@ -84,8 +84,10 @@ class ContentDataProvider
   public dropMimeTypes: string[];
   public dragMimeTypes: string[];
 
+  private treeIdentifier: string;
   private uriToParentMap = new Map<string, string>();
   private forcedMtime = new Map<string, number>();
+  private _revealInProgress = false;
 
   get treeView(): TreeView<ContentItem> {
     return this._treeView;
@@ -106,6 +108,7 @@ class ContentDataProvider
     this.dragMimeTypes = [mimeType];
     this.mimeType = mimeType;
     this.sourceType = sourceType;
+    this.treeIdentifier = treeIdentifier;
 
     this._treeView = window.createTreeView(treeIdentifier, {
       treeDataProvider: this,
@@ -118,7 +121,9 @@ class ContentDataProvider
     );
 
     this._treeView.onDidChangeVisibility(async () => {
-      if (this._treeView.visible) {
+      // Skip refresh when a reveal() call just made the panel visible —
+      // firing onDidChangeTreeData mid-traversal can abort the reveal.
+      if (this._treeView.visible && !this._revealInProgress) {
         const activeProfile: ViyaProfile = profileConfig.getProfileByName(
           profileConfig.getActiveProfile(),
         );
@@ -537,15 +542,35 @@ class ContentDataProvider
   }
 
   public reveal(item: ContentItem): void {
-    this._treeView.reveal(item, {
-      expand: true,
-      select: true,
-      focus: true,
-    }).then(undefined, () => {
-      // Swallow errors — a failed reveal should never block the user.
-      // This can happen when an item has no stable uid (e.g. server-side
-      // items that were just refreshed) and VS Code cannot resolve it.
-    });
+    this._revealInProgress = true;
+    // Focus the view explicitly first. When a QuickPick overlay is active,
+    // focus:true inside TreeView.reveal() is not enough to bring the sidebar
+    // panel into view — VS Code won't switch panels mid-QuickPick. Executing
+    // the auto-generated ${viewId}.focus command forces the panel open, then
+    // we reveal with focus:false since the panel is already shown.
+    void commands
+      .executeCommand(`${this.treeIdentifier}.focus`)
+      .then(() =>
+        this._treeView.reveal(item, { expand: true, select: true, focus: false }),
+      )
+      .then(
+        () => {
+          this._revealInProgress = false;
+        },
+        (err: unknown) => {
+          this._revealInProgress = false;
+          console.error(
+            "[ContentDataProvider] reveal failed for",
+            item.name,
+            "(uid:",
+            item.uid,
+            "parentFolderUri:",
+            item.parentFolderUri,
+            "):",
+            err instanceof Error ? err.message : String(err),
+          );
+        },
+      );
   }
 
   public async uploadUrisToTarget(
