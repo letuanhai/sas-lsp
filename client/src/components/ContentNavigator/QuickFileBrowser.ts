@@ -1,14 +1,6 @@
 // Copyright © 2023, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import {
-  QuickInputButton,
-  ThemeIcon,
-  Uri,
-  commands,
-  extensions,
-  window,
-  workspace,
-} from "vscode";
+import { QuickInputButton, ThemeIcon, Uri, commands, window } from "vscode";
 
 // Module-level active item — lets the keybinding command (`SAS.server.quickBrowseReveal`)
 // read which file/folder is currently highlighted in the QuickPick.
@@ -128,112 +120,6 @@ export function fileIcon(name: string): ThemeIcon {
   }
 }
 
-// ---------------------------------------------------------------------------
-// FileIconResolver — reads the active VS Code file icon theme manifest and
-// returns the real SVG/PNG URI for each file, so the QuickPick shows the same
-// icons as the sidebar file tree. Falls back to codicons (fileIcon()) for
-// font-based themes (e.g. Seti) or when the theme cannot be loaded.
-// ---------------------------------------------------------------------------
-
-interface IconThemeJson {
-  iconDefinitions: Record<string, { iconPath?: string }>;
-  fileExtensions?: Record<string, string>;
-  fileNames?: Record<string, string>;
-  file?: string;
-}
-
-class FileIconResolver {
-  private loaded = false;
-  private lastThemeId: string | undefined;
-  private themeDir: Uri | undefined;
-  private defs: Record<string, { iconPath?: string }> = {};
-  private byExt: Record<string, string> = {};
-  private byName: Record<string, string> = {};
-  private defaultFile: string | undefined;
-
-  async ensureLoaded(): Promise<void> {
-    const themeId = workspace
-      .getConfiguration("workbench")
-      .get<string>("iconTheme");
-    if (this.loaded && themeId === this.lastThemeId) {
-      return;
-    }
-    // Reset state
-    this.loaded = false;
-    this.lastThemeId = themeId;
-    this.themeDir = undefined;
-    this.defs = {};
-    this.byExt = {};
-    this.byName = {};
-    this.defaultFile = undefined;
-
-    if (themeId) {
-      await this.load(themeId);
-    }
-    this.loaded = true;
-  }
-
-  get(name: string): ThemeIcon | Uri {
-    if (!this.themeDir) {
-      return fileIcon(name);
-    }
-    const lower = name.toLowerCase();
-    const dot = lower.lastIndexOf(".");
-    const ext = dot >= 0 ? lower.slice(dot + 1) : "";
-    const iconId =
-      this.byName[lower] ?? this.byExt[ext] ?? this.defaultFile;
-    if (!iconId) {
-      return fileIcon(name);
-    }
-    const def = this.defs[iconId];
-    // font-based themes have no iconPath — fall back to codicons
-    if (!def?.iconPath) {
-      return fileIcon(name);
-    }
-    return Uri.joinPath(this.themeDir, def.iconPath);
-  }
-
-  private async load(themeId: string): Promise<void> {
-    for (const ext of extensions.all) {
-      const contributed = (
-        ext.packageJSON as {
-          contributes?: {
-            iconThemes?: Array<{ id: string; path: string }>;
-          };
-        }
-      )?.contributes?.iconThemes;
-      if (!contributed) {
-        continue;
-      }
-      const theme = contributed.find((t) => t.id === themeId);
-      if (!theme) {
-        continue;
-      }
-      try {
-        const themeFileUri = Uri.joinPath(ext.extensionUri, theme.path);
-        const bytes = await workspace.fs.readFile(themeFileUri);
-        const json: IconThemeJson = JSON.parse(
-          new TextDecoder().decode(bytes),
-        );
-        this.defs = json.iconDefinitions ?? {};
-        this.byExt = json.fileExtensions ?? {};
-        this.byName = json.fileNames ?? {};
-        this.defaultFile = json.file;
-        // themeDir = directory that contains the manifest file
-        const p = themeFileUri.path;
-        this.themeDir = themeFileUri.with({
-          path: p.slice(0, p.lastIndexOf("/")),
-        });
-      } catch {
-        // silently fall back to codicons
-      }
-      return;
-    }
-  }
-}
-
-// One resolver per extension lifetime — keeps the manifest in memory.
-const fileIconResolver = new FileIconResolver();
 
 export function isFolder(item: ContentItem): boolean {
   return (
@@ -282,7 +168,10 @@ interface FolderItem {
 interface FileItem {
   kind: "file";
   label: string;
-  iconPath: ThemeIcon | Uri;
+  // ThemeIcon.File + resourceUri causes VS Code to resolve the icon from the
+  // active file icon theme, identical to TreeItem.resourceUri behaviour.
+  iconPath: ThemeIcon;
+  resourceUri: Uri;
   description?: string;
   item: ContentItem;
   buttons: readonly QuickInputButton[];
@@ -492,15 +381,6 @@ export default class QuickFileBrowser {
     }
 
     cache.set(cacheKey, children);
-
-    // Load icon theme manifest (no-op if already loaded for the current theme)
-    await fileIconResolver.ensureLoaded();
-
-    // Guard again after the async icon load
-    if (version.current !== expectedVersion) {
-      return;
-    }
-
     qp.busy = false;
 
     // Update title to reflect current path
@@ -535,7 +415,8 @@ export default class QuickFileBrowser {
       .map((item) => ({
         kind: "file" as const,
         label: item.name,
-        iconPath: fileIconResolver.get(item.name),
+        iconPath: ThemeIcon.File,
+        resourceUri: Uri.file(item.name),
         item,
         buttons: [REVEAL_BUTTON],
       }));
