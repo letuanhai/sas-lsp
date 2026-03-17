@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { QuickInputButton, ThemeIcon, Uri, commands, window } from "vscode";
 
+import { ContentModel } from "./ContentModel";
+import { ContentItem, Link } from "./types";
+
 // Module-level active item — lets the keybinding command (`SAS.server.quickBrowseReveal`)
 // read which file/folder is currently highlighted in the QuickPick.
 let _activeItem: ContentItem | undefined;
@@ -15,9 +18,6 @@ const REVEAL_BUTTON: QuickInputButton = {
   iconPath: new ThemeIcon("list-tree"),
   tooltip: "Reveal in SAS File Tree (or press Shift+Enter)",
 };
-
-import { ContentModel } from "./ContentModel";
-import { ContentItem, Link } from "./types";
 
 // ---------------------------------------------------------------------------
 // Exported pure helpers (testable without vscode)
@@ -43,83 +43,6 @@ export function syntheticFolder(path: string): ContentItem {
     permission: { write: false, delete: false, addMember: false },
   };
 }
-
-export function fileIcon(name: string): ThemeIcon {
-  const dot = name.lastIndexOf(".");
-  const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
-  switch (ext) {
-    case "sas":
-    case "py":
-    case "r":
-    case "rmd":
-    case "js":
-    case "ts":
-    case "jsx":
-    case "tsx":
-    case "html":
-    case "htm":
-    case "xml":
-    case "json":
-    case "jsonc":
-    case "css":
-    case "scss":
-    case "less":
-    case "yaml":
-    case "yml":
-    case "sh":
-    case "bash":
-    case "c":
-    case "cpp":
-    case "h":
-    case "java":
-    case "cs":
-    case "go":
-    case "rs":
-    case "php":
-    case "rb":
-      return new ThemeIcon("file-code");
-    case "txt":
-    case "log":
-    case "rst":
-      return new ThemeIcon("file-text");
-    case "md":
-    case "markdown":
-      return new ThemeIcon("markdown");
-    case "csv":
-    case "tsv":
-    case "xls":
-    case "xlsx":
-      return new ThemeIcon("table");
-    case "sql":
-    case "sas7bdat":
-    case "parquet":
-    case "feather":
-    case "h5":
-    case "hdf5":
-    case "db":
-    case "sqlite":
-    case "sqlite3":
-      return new ThemeIcon("database");
-    case "zip":
-    case "tar":
-    case "gz":
-    case "bz2":
-    case "exe":
-    case "dll":
-    case "so":
-    case "png":
-    case "jpg":
-    case "jpeg":
-    case "gif":
-    case "svg":
-    case "ico":
-    case "pdf":
-      return new ThemeIcon("file-binary");
-    default:
-      return new ThemeIcon("file");
-  }
-}
-
 
 export function isFolder(item: ContentItem): boolean {
   return (
