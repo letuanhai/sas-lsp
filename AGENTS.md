@@ -68,7 +68,38 @@ npm run pretest && npm run test-client
 npm run test-client:label integration
 ```
 
-**What to test here:** Extension activation, command registration, LSP features (completion, hover, diagnostics), notebook serialization, content/library tree views.
+**What to test here:** Extension activation, command registration, LSP features (completion, hover, diagnostics), notebook serialization, content/library tree views, QuickPick UI interactions.
+
+#### Creating a new integration test
+
+1. **Place the test file** under `client/test/` following the existing directory structure (e.g., `client/test/components/ContentNavigator/QuickFileBrowser.test.ts`). Mirror the source tree.
+2. **Import from `"vscode"` directly** — the extension host provides the real API. Use `chai` for assertions and `sinon` for stubs/spies (same stack as harness tests).
+3. **Stub VS Code UI** when needed — e.g., stub `window.createQuickPick` to capture the QuickPick instance, stub `commands.executeCommand` to intercept `setContext` calls. Forward non-stubbed calls to the original implementation.
+4. **Mock the data layer, not the UI layer** — create stub adapters implementing `ContentAdapter` (or similar interfaces) that return predetermined data. Pass them into real model classes. This tests the full integration from model → UI without needing a live server.
+5. **Use polling helpers for async UI** — QuickPick items load asynchronously. Use a `waitForNotBusy()` polling helper (check `qp.busy` every ~50ms with a timeout) rather than fixed `sleep()` calls.
+6. **Clean up in `afterEach`** — always hide/dispose QuickPicks and restore sinon sandboxes to avoid leaking state between tests.
+
+#### Building and running
+
+```bash
+# Compile TypeScript (required before running)
+npx tsc -p ./client/tsconfig.json
+
+# Run a single test file
+xvfb-run npx vscode-test --run client/out/test/components/ContentNavigator/QuickFileBrowser.test.js
+
+# Run all integration tests
+npm run pretest && xvfb-run npm run test-client
+
+# Type-check only (no compile output, fast feedback)
+npx tsc -p ./client/tsconfig.json --noEmit
+```
+
+**Headless environments:** VS Code requires a display server. Use `xvfb-run` on Linux headless machines (install with `sudo apt-get install -y xvfb`). GPU errors in the output are harmless.
+
+#### Reference example
+
+See `client/test/components/ContentNavigator/QuickFileBrowser.test.ts` for a complete example showing: stub adapter creation, QuickPick instance capture via `window.createQuickPick` spy, async item loading, `setContext` verification, and proper cleanup.
 
 ### Decision guide for agents
 
