@@ -50,9 +50,7 @@ All requests require:
 **Cookie requirements differ by environment:**
 
 - **Production instances**: An authorization token cookie (e.g., `35ab575d..._Cluster2=value`) obtained from the SAS Studio login flow **must** be included in **every** API request, including session creation.
-- **Dev instance (`192.168.0.141`)**: No authorization cookie is required. Session creation and all API calls work without any auth cookie. However, the server still sets a `JSESSIONID` cookie in the session creation response — capture and store it, as it is required for the `/reset` endpoint only.
-
-> **Note on `JSESSIONID`**: This is a server-side session association cookie, distinct from an authorization token. On the dev instance it is only needed for `/reset`. On production, the auth cookie serves both purposes.
+- **Dev instance (`192.168.0.141`)**: No authorization cookie is required. Session creation and all API calls work without any auth cookie.
 
 ---
 

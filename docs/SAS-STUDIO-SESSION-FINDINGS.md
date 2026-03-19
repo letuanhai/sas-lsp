@@ -20,10 +20,7 @@ The SAS Studio Web dev instance allows **anonymous session creation** without au
 
 - **No login credentials** required for session creation
 - **No authorization cookie** needed in the request — just `POST {}` to create a session
-- However, the server **always sets a `JSESSIONID` cookie** in the session creation response
-- This `JSESSIONID` must be stored and sent **only** for endpoints that require server-side session association (specifically: **reset**)
-- For all other endpoints on the dev instance, no cookie is required
-- Always capture cookies from session creation: `curl -c cookies.txt ...`
+- For all endpoints on the dev instance, no cookie is required
 
 ### Production instances
 
@@ -154,59 +151,6 @@ Empty body, status code 404
 ### Response (HTTP 503 - Server Overloaded)
 
 Server may return 503 when too many sessions are created in parallel with active workloads.
-
----
-
-## Session Reset
-
-Resets the SAS workspace without creating a new session. This clears libraries, file shortcuts, and workspace state while keeping the same session ID.
-
-### Endpoint
-
-```
-GET /SASStudio/38/sasexec/sessions/{sessionId}/reset
-RemoteSession-Id: {sessionId}
-Cookie: JSESSIONID={token}
-```
-
-**⚠️ The `JSESSIONID` cookie is required.** Without it, the server returns HTTP 404 with a server-side error. The `JSESSIONID` is issued in the `Set-Cookie` header of the session creation response — capture it then.
-
-### Response (HTTP 200 - Success)
-
-Returns the **full session object** (same format as session creation), reflecting post-reset state. Not an empty body.
-
-### Response (HTTP 404 - Missing Cookie)
-
-Empty body with error header:
-```
-Exception: An%20unknown%20error%20occurred%20while%20processing%20your%20request...
-```
-
-This is a misleading 404 — the endpoint exists but the server cannot associate the request with a valid HTTP session without the `JSESSIONID` cookie.
-
-### UI Behavior
-
-The "Reset SAS Session (F9)" button in the UI triggers a confirmation dialog: "If you continue, all of the libraries and file shortcuts that you created during this session will be deleted. Do you want to continue?" — clicking Yes calls this endpoint.
-
-### Use Case
-
-Useful for clearing workspace state between tests without the overhead of creating a new session.
-
-### Example
-
-```bash
-# Create session and capture JSESSIONID cookie
-curl -s -c /tmp/sas_cookies.txt \
-  'http://192.168.0.141/SASStudio/38/sasexec/sessions' \
-  -X POST -H 'Content-Type: application/json' -d '{}'
-
-SESSION_ID=$(cat /tmp/sas_session.json | jq -r '.id')
-
-# Reset (requires the cookie)
-curl -s -b /tmp/sas_cookies.txt \
-  "http://192.168.0.141/SASStudio/38/sasexec/sessions/${SESSION_ID}/reset" \
-  -H "RemoteSession-Id: ${SESSION_ID}"
-```
 
 ---
 
@@ -416,7 +360,6 @@ The dev SAS Studio server has limited memory. Be conservative with parallel sess
 | POST   | `/sasexec/sessions`                             | No                   | Create new session    | Session object + sets JSESSIONID |
 | GET    | `/sasexec/sessions/{id}`                        | No                   | Get session details   | Session object (HTTP 200)       |
 | GET    | `/sasexec/sessions/{id}/ping`                   | No                   | Check session status  | Ping data (HTTP 200) or 404     |
-| GET    | `/sasexec/sessions/{id}/reset`                  | **Yes** (JSESSIONID) | Reset workspace state | Session object (HTTP 200)       |
 | DELETE | `/sasexec/sessions/{id}`                        | No                   | Delete session        | Empty (HTTP 200)                |
 | POST   | `/sasexec/sessions/{id}/asyncSubmissions`       | No                   | Submit SAS code       | Submission UUID string (HTTP 200) |
 | GET    | `/sasexec/sessions/{id}/messages/longpoll`      | No                   | Poll for results      | Messages array (HTTP 200)       |
@@ -426,10 +369,10 @@ The dev SAS Studio server has limited memory. Be conservative with parallel sess
 
 ## API Request Patterns
 
-### Creating a Session (capturing JSESSIONID)
+### Creating a Session
 
 ```bash
-curl -s -c /tmp/sas_cookies.txt \
+curl -s \
   'http://192.168.0.141/SASStudio/38/sasexec/sessions' \
   -X POST -H 'Content-Type: application/json' -d '{}' \
   -o /tmp/sas_session.json
@@ -444,14 +387,6 @@ curl -s "http://192.168.0.141/SASStudio/38/sasexec/sessions/${SESSION_ID}/ping" 
   -H "RemoteSession-Id: ${SESSION_ID}" \
   -H 'Accept: */*' \
   -w "\nHTTP Status: %{http_code}\n"
-```
-
-### Resetting Session (requires cookie)
-
-```bash
-curl -s -b /tmp/sas_cookies.txt \
-  "http://192.168.0.141/SASStudio/38/sasexec/sessions/${SESSION_ID}/reset" \
-  -H "RemoteSession-Id: ${SESSION_ID}"
 ```
 
 ### Submitting Code
@@ -483,24 +418,21 @@ curl -s --max-time 35 \
 For the VS Code extension tests (dev instance):
 
 1. **Session creation is trivial** - Single POST request, no authorization cookie needed for dev instance; production requires auth cookie from login flow for all requests including session creation
-2. **Capture JSESSIONID on creation** - Required for reset on dev instance; use `-c cookiefile` with curl
-3. **Session checking requires HTTP request** - Use `/ping` endpoint for lightweight checks
-4. **Session cleanup is available** - Use `DELETE /sessions/{id}` to explicitly delete sessions
-5. **Poll message field is `messageType`** - Not `type`; payload is in `payload` field
-6. **Reuse sessions** - Don't create new sessions for every test due to server limitations
-7. **Clean up after tests** - Always delete sessions in `after`/`afterEach` hooks
+2. **Session checking requires HTTP request** - Use `/ping` endpoint for lightweight checks
+3. **Session cleanup is available** - Use `DELETE /sessions/{id}` to explicitly delete sessions
+4. **Poll message field is `messageType`** - Not `type`; payload is in `payload` field
+5. **Reuse sessions** - Don't create new sessions for every test due to server limitations
+6. **Clean up after tests** - Always delete sessions in `after`/`afterEach` hooks
 
 The recommended approach is to create a session once at the start of a test suite and reuse it across tests, then explicitly delete it when done:
 
 ```typescript
 let sessionId: string;
-let cookies: string; // JSESSIONID for reset endpoint
 
 before(async () => {
-  // Create once for all tests; capture JSESSIONID cookie
-  const { id, jsessionId } = await createStudioWebSession();
+  // Create once for all tests
+  const { id } = await createStudioWebSession();
   sessionId = id;
-  cookies = jsessionId;
 });
 
 after(async () => {
