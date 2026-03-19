@@ -18,9 +18,14 @@ headers = {
     "RemoteSession-Id": SESSION_ID,
 }
 
-# Cookies (obtained from browser after login)
+# Cookies:
+# - Dev instance (192.168.0.141): No authorization cookie required.
+#   The server sets JSESSIONID in the session-creation response; capture it
+#   and include it only for the /reset endpoint.
+# - Production instances: An authorization token cookie from the SAS Studio
+#   login flow is required for ALL requests, including session creation.
 cookies = {
-    "JSESSIONID": "75947C89AE5F3110867C7D04204566D4",
+    "JSESSIONID": "75947C89AE5F3110867C7D04204566D4",  # Only needed for /reset on dev; required everywhere on production
 }
 ```
 
@@ -665,7 +670,7 @@ new_session_id = response.text  # Returns session UUID
 ## Important Notes
 
 1. **Session Management**: The `RemoteSession-Id` header must match an active SAS Studio session
-2. **Authentication**: The `JSESSIONID` cookie is required for all requests
+2. **Authentication**: On **production** instances, an authorization token cookie from the SAS Studio login flow is required for **all** requests. On the **dev instance**, no authorization cookie is needed — the `JSESSIONID` cookie (set during session creation) is only required for the `/reset` endpoint.
 3. **Path Encoding**: Use `~ps~` instead of `/` when referring to paths in tree endpoints
 4. **Double Encoding**: Most paths are double URI-encoded using `encodeURI(encodeURI(path))`
 5. **Folder Creation**: PUT operations replace the entire directory listing, so include all existing items

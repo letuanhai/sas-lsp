@@ -45,8 +45,14 @@ http://{host}/SASStudio/{version}/sasexec
 
 All requests require:
 
-- **Cookie header**: Session cookie from SAS Studio (e.g., `35ab575d..._Cluster2=value`)
 - **RemoteSession-Id header**: The remote session UUID (e.g., `939a74d4-e309-4f88-8e85-fd81a02b8eb5`)
+
+**Cookie requirements differ by environment:**
+
+- **Production instances**: An authorization token cookie (e.g., `35ab575d..._Cluster2=value`) obtained from the SAS Studio login flow **must** be included in **every** API request, including session creation.
+- **Dev instance (`192.168.0.141`)**: No authorization cookie is required. Session creation and all API calls work without any auth cookie. However, the server still sets a `JSESSIONID` cookie in the session creation response — capture and store it, as it is required for the `/reset` endpoint only.
+
+> **Note on `JSESSIONID`**: This is a server-side session association cookie, distinct from an authorization token. On the dev instance it is only needed for `/reset`. On production, the auth cookie serves both purposes.
 
 ---
 
@@ -930,10 +936,12 @@ This endpoint is called after receiving the `SubmitComplete` message from longpo
 ```typescript
 import axios from "axios";
 
+// Production: authCookie is the authorization token from the SAS Studio login flow.
+// Dev instance: no authorization cookie needed; pass an empty string or omit the Cookie header.
 const axiosInstance = axios.create({
   baseURL: `${endpoint}/sasexec`,
   headers: {
-    Cookie: cookieString,
+    ...(authCookie ? { Cookie: authCookie } : {}),
     "RemoteSession-Id": sessionId,
   },
 });
