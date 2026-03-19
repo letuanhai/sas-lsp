@@ -19,14 +19,15 @@ The SAS Studio Web dev instance allows **anonymous session creation** without au
 ### Dev instance (192.168.0.141)
 
 - **No login credentials** required for session creation
-- **No auth cookies** needed in the request — just `POST {}` to create a session
+- **No authorization cookie** needed in the request — just `POST {}` to create a session
 - However, the server **always sets a `JSESSIONID` cookie** in the session creation response
-- This `JSESSIONID` must be stored and sent for endpoints that require server-side session association (specifically: **reset**)
+- This `JSESSIONID` must be stored and sent **only** for endpoints that require server-side session association (specifically: **reset**)
+- For all other endpoints on the dev instance, no cookie is required
 - Always capture cookies from session creation: `curl -c cookies.txt ...`
 
 ### Production instances
 
-- Authentication cookies (e.g. from a login flow) are required before session creation
+- **All API requests require an authorization token cookie** obtained from the SAS Studio login flow — this applies to session creation and every subsequent call
 - The `JSESSIONID` returned from login must be included in all subsequent API calls
 - The `RemoteSession-Id` header is required in addition to the auth cookie
 
@@ -408,16 +409,18 @@ The dev SAS Studio server has limited memory. Be conservative with parallel sess
 
 ## API Endpoints Summary
 
-| Method | Endpoint                                        | Cookie needed? | Description           | Response                        |
-| ------ | ----------------------------------------------- | -------------- | --------------------- | ------------------------------- |
-| POST   | `/sasexec/sessions`                             | No             | Create new session    | Session object + sets JSESSIONID |
-| GET    | `/sasexec/sessions/{id}`                        | No             | Get session details   | Session object (HTTP 200)       |
-| GET    | `/sasexec/sessions/{id}/ping`                   | No             | Check session status  | Ping data (HTTP 200) or 404     |
-| GET    | `/sasexec/sessions/{id}/reset`                  | **Yes**        | Reset workspace state | Session object (HTTP 200)       |
-| DELETE | `/sasexec/sessions/{id}`                        | No             | Delete session        | Empty (HTTP 200)                |
-| POST   | `/sasexec/sessions/{id}/asyncSubmissions`       | No             | Submit SAS code       | Submission UUID string (HTTP 200) |
-| GET    | `/sasexec/sessions/{id}/messages/longpoll`      | No             | Poll for results      | Messages array (HTTP 200)       |
-| DELETE | `/sasexec/sessions/{id}/submissions?id={subId}` | No             | Cancel submission     | Empty (HTTP 200)                |
+> **Cookie column applies to the dev instance only.** On production instances, an authorization token cookie is required for **all** requests regardless of this column.
+
+| Method | Endpoint                                        | Cookie needed? (dev) | Description           | Response                        |
+| ------ | ----------------------------------------------- | -------------------- | --------------------- | ------------------------------- |
+| POST   | `/sasexec/sessions`                             | No                   | Create new session    | Session object + sets JSESSIONID |
+| GET    | `/sasexec/sessions/{id}`                        | No                   | Get session details   | Session object (HTTP 200)       |
+| GET    | `/sasexec/sessions/{id}/ping`                   | No                   | Check session status  | Ping data (HTTP 200) or 404     |
+| GET    | `/sasexec/sessions/{id}/reset`                  | **Yes** (JSESSIONID) | Reset workspace state | Session object (HTTP 200)       |
+| DELETE | `/sasexec/sessions/{id}`                        | No                   | Delete session        | Empty (HTTP 200)                |
+| POST   | `/sasexec/sessions/{id}/asyncSubmissions`       | No                   | Submit SAS code       | Submission UUID string (HTTP 200) |
+| GET    | `/sasexec/sessions/{id}/messages/longpoll`      | No                   | Poll for results      | Messages array (HTTP 200)       |
+| DELETE | `/sasexec/sessions/{id}/submissions?id={subId}` | No                   | Cancel submission     | Empty (HTTP 200)                |
 
 ---
 
@@ -477,10 +480,10 @@ curl -s --max-time 35 \
 
 ## Conclusion
 
-For the VS Code extension tests:
+For the VS Code extension tests (dev instance):
 
-1. **Session creation is trivial** - Single POST request, no auth needed for dev instance
-2. **Capture JSESSIONID on creation** - Required for reset; use `-c cookiefile` with curl
+1. **Session creation is trivial** - Single POST request, no authorization cookie needed for dev instance; production requires auth cookie from login flow for all requests including session creation
+2. **Capture JSESSIONID on creation** - Required for reset on dev instance; use `-c cookiefile` with curl
 3. **Session checking requires HTTP request** - Use `/ping` endpoint for lightweight checks
 4. **Session cleanup is available** - Use `DELETE /sessions/{id}` to explicitly delete sessions
 5. **Poll message field is `messageType`** - Not `type`; payload is in `payload` field
