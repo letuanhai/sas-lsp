@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). If you introduce breaking changes, please group them together in the "Changed" section using the **BREAKING:** prefix.
 
+## [1.19.0-sasstudio-web] - 2026-03-31
+
+### Added
+
+- Add SAS Studio Web (`studioweb`) connection type — connect to an existing SAS Studio browser session using a session ID and cookie
+- Add library navigator support for SAS Studio Web: browse libraries, tables, and SAS views
+- Add file/server pane support for SAS Studio Web: browse, create, rename, move, delete, upload, and download server files
+- Add data viewer support for SAS Studio Web tables (with row/column counts and column format info)
+- Add ability to open `.sas7bdat` files from the file pane directly in the data viewer (SAS Studio Web)
+- Add QuickFileBrowser (`Ctrl+Shift+E`) — keyboard-driven fuzzy file navigator for SAS Studio Web server files, with `Shift+Enter` to reveal in tree
+- Show output datasets produced by a submission in the SAS log panel (SAS Studio Web)
+- Distinguish SAS views from tables in the library navigator (SAS Studio Web)
+- Support server-side text encoding when reading and writing files (SAS Studio Web)
+- Add `SAS.studioweb.newSession` command to re-prompt for session credentials without restarting VS Code
+
+### Fixed
+
+- Show HTTP error notifications (with method + URL) for all failed API calls via axios response interceptor (SAS Studio Web)
+- Fix submission cancel to send `DELETE` with the correct bare submission UUID
+- Open server tree items in persistent editor tabs; fix tab matching by full URI
+- Fix file pane UX: guard against untitled files, duplicate name check on drop, stale cache after rename/move, confirmation on drag-and-drop overwrite
+- Fetch server encoding during `ensureCredentials` so it is available for all file operations
+- Fix ODS wrapper stripping before submission; fetch HTML results via the `results` link in `SubmitComplete` poll message
+
 ## [1.19.0] - 2026-03-26
 
 ### Added
