@@ -72,48 +72,7 @@ To test: open in VS Code with F5 ("Launch Client"), connect to a SAS server, ope
 
 ---
 
-## Phase 1A: Text Selection
-
-**Goal**: Enable native text selection in column headers and cell values.
-
-### Changes
-
-#### `client/src/webview/DataViewer.tsx`
-
-Add two props to `<AgGridReact>`:
-
-```tsx
-<AgGridReact
-  // ... existing props ...
-  enableCellTextSelection={true}
-  ensureDomOrder={true}
-/>
-```
-
-`enableCellTextSelection` is a **Community** (free) feature. It enables native browser text selection inside cells. `ensureDomOrder` is required for it to work correctly (ensures DOM order matches visual order).
-
-**Side effect**: With `enableCellTextSelection=true`, ag-grid's built-in Ctrl+C copies only selected text (not focused cell). This is the desired behavior for us.
-
-#### `client/src/webview/ColumnHeader.tsx`
-
-The column header is a custom component. The column name is rendered in a `<span className="ag-header-cell-text">`. Native text selection should work if there are no CSS overrides preventing it.
-
-**Verify**: Ensure no CSS rule in `DataViewer.css` or ag-grid themes sets `user-select: none` on header elements. If found, override:
-
-```css
-.ag-header-cell-text {
-  user-select: text;
-  cursor: text;
-}
-```
-
-### Localization
-
-No new strings needed.
-
----
-
-## Phase 1B: Cell/Row/Column/Range Selection with Copy
+## Phase 1: Cell/Row/Column/Range Selection with Copy
 
 **Goal**: Custom selection layer on top of ag-grid Community that supports selecting cells by row, column, or rectangular range, with Ctrl/Cmd+C to copy.
 
@@ -242,8 +201,8 @@ useEffect(() => {
   const handleCopy = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selection.hasSelection()) {
       e.preventDefault();
-      const tsv = selection.getSelectedDataAsTSV(gridRef.current.api);
-      navigator.clipboard.writeText(tsv);
+      const csv = selection.getSelectedDataAsCSV(gridRef.current.api);
+      navigator.clipboard.writeText(csv);
     }
   };
   document.addEventListener('keydown', handleCopy);
@@ -251,10 +210,18 @@ useEffect(() => {
 }, [selection]);
 ```
 
-`getSelectedDataAsTSV()` implementation:
+`getSelectedDataAsCSV()` implementation:
 
 ```ts
-getSelectedDataAsTSV(api: GridApi): string {
+/** Quote a value for CSV: wrap in double quotes, escape embedded quotes as "" */
+const csvQuote = (value: string): string => {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+};
+
+getSelectedDataAsCSV(api: GridApi): string {
   const [rowStart, rowEnd] = getRowRange(anchor.row, end.row);
   const cols = mode === 'row'
     ? allColumns.filter(c => c !== '#')
@@ -262,12 +229,12 @@ getSelectedDataAsTSV(api: GridApi): string {
 
   const lines: string[] = [];
   // Header row
-  lines.push(cols.join('\t'));
+  lines.push(cols.map(csvQuote).join(','));
   // Data rows
   for (let r = rowStart; r <= rowEnd; r++) {
     const rowNode = api.getDisplayedRowAtIndex(r);
     if (!rowNode?.data) continue;
-    lines.push(cols.map(col => rowNode.data[col] ?? '').join('\t'));
+    lines.push(cols.map(col => csvQuote(rowNode.data[col] ?? '')).join(','));
   }
   return lines.join('\n');
 }
@@ -278,8 +245,7 @@ getSelectedDataAsTSV(api: GridApi): string {
 #### Context Menu (optional enhancement)
 
 Add a right-click context menu on selected cells with options:
-- Copy (TSV)
-- Copy as CSV
+- Copy (CSV)
 - Copy column names
 
 Use the existing `GridMenu` component. Wire via a `onCellContextMenu` handler or a custom `contextmenu` event listener.
@@ -297,7 +263,7 @@ Add to `panels/DataViewer.ts` `l10nMessages()`:
 
 ---
 
-## Phase 1C: Column Management Tab
+## Phase 2: Column Management Tab
 
 **Goal**: Add a "Columns" tab to the DataViewer pane (next to the data grid) for column visibility management, search, and copy.
 
@@ -452,7 +418,7 @@ Add to `panels/DataViewer.ts` `l10nMessages()`:
 
 ---
 
-## Phase 2: SQLite3 Editor Integration
+## Phase 3: SQLite3 Editor Integration
 
 ### Goal
 
@@ -646,23 +612,20 @@ Alternatively, register the commands at the VS Code level and have them access t
 ## Implementation Order
 
 ```
-1. Phase 1A — Text selection (smallest, ~10 min)
-     Files: DataViewer.tsx, DataViewer.css (possibly)
-
-2. Phase 1C — Column management tab (~2-4 hours)
-     Files: new ColumnManager.tsx, new TabBar.tsx, DataViewer.tsx,
-            useDataViewer.ts, DataViewer.css, panels/DataViewer.ts
-
-3. Phase 1B — Range selection + copy (~3-5 hours)
+1. Phase 1 — Range selection + copy (~3-5 hours)
      Files: new useSelection.ts, DataViewer.tsx, useDataViewer.ts,
             ColumnHeader.tsx, DataViewer.css, panels/DataViewer.ts
 
-4. Phase 2 — SQLite integration (~2-3 hours)
+2. Phase 2 — Column management tab (~2-4 hours)
+     Files: new ColumnManager.tsx, new TabBar.tsx, DataViewer.tsx,
+            useDataViewer.ts, DataViewer.css, panels/DataViewer.ts
+
+3. Phase 3 — SQLite integration (~2-3 hours)
      Files: new sqliteExport.ts, LibraryNavigator/index.ts,
             panels/DataViewer.ts, package.json (commands)
 ```
 
-Phases can be worked on independently by different agents. Phase 1A should be done first (other phases build on it). Phases 1B, 1C, and 2 have no mutual dependencies.
+All three phases have no mutual dependencies and can be worked on in parallel by different agents. Do **NOT** enable `enableCellTextSelection` — it conflicts with Phase 1's custom selection layer.
 
 ---
 
