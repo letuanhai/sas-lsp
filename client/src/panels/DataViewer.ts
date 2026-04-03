@@ -65,6 +65,7 @@ class DataViewer extends WebView {
       Descending: l10n.t("Descending"),
       Numeric: l10n.t("Numeric"),
       Options: l10n.t("Options"),
+      "Press {0} to copy": l10n.t("Press {0} to copy"),
       Properties: l10n.t("Properties"),
       Search: l10n.t("Search"),
       "Select all": l10n.t("Select all"),
