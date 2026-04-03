@@ -516,6 +516,9 @@ const useDataViewer = () => {
         setColumns([]);
         setTotalRowCount(undefined);
         setTotalColumnCount(undefined);
+        setOrderedColumnNames([]);
+        setHiddenColumns(new Set());
+        setActiveTab("data");
       }
     };
     window.addEventListener("message", handleReset);
