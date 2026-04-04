@@ -236,7 +236,9 @@ class DataViewer extends WebView {
     columns?: Column[],
     rows?: string[][],
   ): Promise<void> {
-    if (!columns?.length || !rows) return;
+    if (!columns?.length || !rows) {
+      return;
+    }
     const sql = generateSQLiteSQL({
       tableName: this.title,
       columns,
@@ -273,7 +275,9 @@ class DataViewer extends WebView {
       return;
     }
 
-    if (!columns?.length || !rows) return;
+    if (!columns?.length || !rows) {
+      return;
+    }
     const sql = generateSQLiteSQL({
       tableName: this.title,
       columns,
