@@ -472,7 +472,7 @@ Pure function, no dependencies on VS Code API (can be unit tested in test-harnes
 
 ```ts
 export interface SQLiteExportOptions {
-  tableName: string;        // e.g., "WORK_CARS"
+  tableName: string;        // e.g., `WORK.CARS`
   columns: Column[];        // from fetchColumns()
   rows: string[][];         // array of row arrays (cell values as strings)
   includeDropTable: boolean;
@@ -499,9 +499,9 @@ No date/datetime conversion. SAS dates are numeric (days since 1960-01-01); user
 -- SAS Dataset: WORK.CARS (15 columns, 428 rows)
 -- Exported from SAS Extension
 
-DROP TABLE IF EXISTS "WORK_CARS";
+DROP TABLE IF EXISTS `WORK.CARS`;
 
-CREATE TABLE "WORK_CARS" (
+CREATE TABLE `WORK.CARS` (
   "Make" TEXT,
   "Model" TEXT,
   "MSRP" REAL,
@@ -510,13 +510,13 @@ CREATE TABLE "WORK_CARS" (
 
 BEGIN TRANSACTION;
 
-INSERT INTO "WORK_CARS" VALUES
+INSERT INTO `WORK.CARS` VALUES
   ('Acura', 'MDX', 36945.0, 33337.0),
   ('Acura', 'RSX Type S 2dr', 23820.0, 21761.0),
   -- ... up to 500 rows per INSERT
   ;
 
-INSERT INTO "WORK_CARS" VALUES
+INSERT INTO `WORK.CARS` VALUES
   -- next batch ...
   ;
 
